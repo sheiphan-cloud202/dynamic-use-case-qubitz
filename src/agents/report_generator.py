@@ -1,5 +1,5 @@
 """
-Report generation agent for the Business Transformation Agentt.
+Report generation agent for the Business Transformation Agent.
 """
 import logging
 import os
@@ -359,7 +359,7 @@ class ConsolidatedReportGenerator:
                 **Custom Context Alignment**: This analysis addresses the specified focus areas: {', '.join(custom_context.get('focus_areas', []))}. All recommendations align with the custom requirements and strategic priorities."""
         
         # Generate comprehensive XML report with enhanced formatting and real citations 
-            xml_prompt = f""" 
+        xml_prompt = f""" 
 Generate a comprehensive business transformation report for **{company_profile.name}** using XML-like tags for structured formatting. 
 
 MANDATORY XML TAG STRUCTURE - Use ALL these tags appropriately:
@@ -742,10 +742,7 @@ CRITICAL REQUIREMENTS FOR ENHANCED DETAIL:
 
 
 Generate a comprehensive, detailed report that demonstrates deep industry knowledge and provides extensive strategic analysis for ALL {len(use_cases)} transformation use cases using the complete XML formatting structure, REAL web citations throughout, and detailed financial analysis with specific percentage amounts for all improvements, returns, and projections.
-"""
-
-
-
+            """
 
         try:
             response = self.report_agent(xml_prompt)
