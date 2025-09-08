@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class AgenticWAFROrchestrator:
     """Enhanced orchestrator with web scraping, custom prompt processing, file parsing, personalized use case generation, and comprehensive reporting."""
 
-    def __init__(self): 
+    def __init__(self):
         self.model_manager = EnhancedModelManager()
         self.research_swarm = CompanyResearchSwarm(self.model_manager)
         self.dynamic_use_case_generator = DynamicUseCaseGenerator(self.model_manager)
@@ -954,3 +954,6 @@ Ensure profile extraction aligns with these custom requirements and focus areas.
             business_model=profile.business_model,
             additional_context=f"Transformation readiness: {profile.cloud_maturity}, Business stage: {profile.growth_stage}"
         )
+        
+        
+
