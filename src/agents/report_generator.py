@@ -1,6 +1,7 @@
 """
 Report generation agent for the Business Transformation Agent.
 """
+
 import logging
 import os
 import re
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 # Try to import PDF generation libraries
 try:
     import weasyprint
+
     PDF_GENERATION_AVAILABLE = True
     logger.info("✅ WeasyPrint PDF generation available")
 except (ImportError, OSError) as e:
@@ -35,6 +37,7 @@ except (ImportError, OSError) as e:
         from reportlab.lib.units import inch
         from reportlab.lib.colors import black, blue, HexColor
         from reportlab.platypus.flowables import HRFlowable
+
         REPORTLAB_AVAILABLE = True
         PDF_GENERATION_AVAILABLE = True
         logger.info("✅ ReportLab available for PDF generation")
@@ -43,167 +46,217 @@ except (ImportError, OSError) as e:
         PDF_GENERATION_AVAILABLE = False
         logger.warning("⚠️ No PDF generation libraries available")
 
+
 class ReportXMLParser:
     """Enhanced parser for converting XML tags to formatted PDF content with support for multiple formatting tags."""
-    
+
     @staticmethod
     def parse_xml_tags(xml_content: str) -> Dict[str, Any]:
         """Parse XML-like tags from report content with comprehensive formatting support."""
-        
+
         parsed_content = {
-            'title': '',
-            'sections': [],
-            'citations': {},
-            'inline_citations': []
+            "title": "",
+            "sections": [],
+            "citations": {},
+            "inline_citations": [],
         }
-        
+
         # Clean up XML content - remove any text before the first XML tag
         xml_content = xml_content.strip()
-        first_tag_match = re.search(r'<[^>]+>', xml_content)
+        first_tag_match = re.search(r"<[^>]+>", xml_content)
         if first_tag_match:
-            xml_content = xml_content[first_tag_match.start():]
+            xml_content = xml_content[first_tag_match.start() :]
         else:
             # If no XML tags found, return empty structure
             logger.warning("No XML tags found in content, returning empty structure")
             return parsed_content
-        
+
         # Extract title
-        title_match = re.search(r'<heading_bold>(.*?)</heading_bold>', xml_content, re.DOTALL)
+        title_match = re.search(
+            r"<heading_bold>(.*?)</heading_bold>", xml_content, re.DOTALL
+        )
         if title_match:
-            parsed_content['title'] = title_match.group(1).strip()
+            parsed_content["title"] = title_match.group(1).strip()
             logger.info(f"✅ Extracted title: {parsed_content['title']}")
         else:
             logger.warning("⚠️ No title found in XML content")
-        
+
         # Extract all content sections - now includes various types
         section_patterns = [
-            r'<content>(.*?)</content>',
-            r'<sub-heading-bold>(.*?)</sub-heading-bold>',
-            r'<sub-heading>(.*?)</sub-heading>',
-            r'<section>(.*?)</section>',
-            r'<paragraph>(.*?)</paragraph>',
-            r'<list>(.*?)</list>',
-            r'<table>(.*?)</table>'
+            r"<content>(.*?)</content>",
+            r"<sub-heading-bold>(.*?)</sub-heading-bold>",
+            r"<sub-heading>(.*?)</sub-heading>",
+            r"<section>(.*?)</section>",
+            r"<paragraph>(.*?)</paragraph>",
+            r"<list>(.*?)</list>",
+            r"<table>(.*?)</table>",
         ]
-        
+
         # Find all sections in order
         all_sections = []
         for pattern in section_patterns:
             matches = re.finditer(pattern, xml_content, re.DOTALL | re.IGNORECASE)
             for match in matches:
-                section_type = pattern.split('(')[0].replace('<', '').replace('>', '').replace('\\', '')
-                all_sections.append({
-                    'type': section_type,
-                    'content': match.group(1),
-                    'start_pos': match.start()
-                })
-        
+                section_type = (
+                    pattern.split("(")[0]
+                    .replace("<", "")
+                    .replace(">", "")
+                    .replace("\\", "")
+                )
+                all_sections.append(
+                    {
+                        "type": section_type,
+                        "content": match.group(1),
+                        "start_pos": match.start(),
+                    }
+                )
+
         # Sort sections by position in document
-        all_sections.sort(key=lambda x: x['start_pos'])
-        
+        all_sections.sort(key=lambda x: x["start_pos"])
+
         logger.info(f"✅ Found {len(all_sections)} sections in XML content")
-        
+
         citation_counter = 1
         for section in all_sections:
             # Process citations within content
-            processed_content, citation_counter = ReportXMLParser._process_inline_citations(
-                section['content'], parsed_content['citations'], 
-                parsed_content['inline_citations'], citation_counter
+            processed_content, citation_counter = (
+                ReportXMLParser._process_inline_citations(
+                    section["content"],
+                    parsed_content["citations"],
+                    parsed_content["inline_citations"],
+                    citation_counter,
+                )
             )
-            
+
             # Process additional formatting tags
-            processed_content = ReportXMLParser._process_formatting_tags(processed_content)
-            
-            parsed_content['sections'].append({
-                'type': section['type'],
-                'content': processed_content
-            })
-        
+            processed_content = ReportXMLParser._process_formatting_tags(
+                processed_content
+            )
+
+            parsed_content["sections"].append(
+                {"type": section["type"], "content": processed_content}
+            )
+
         return parsed_content
-    
+
     @staticmethod
-    def _process_inline_citations(content: str, citations_dict: Dict[str, str], 
-                                inline_citations: List[Dict], citation_counter: int) -> tuple:
+    def _process_inline_citations(
+        content: str,
+        citations_dict: Dict[str, str],
+        inline_citations: List[Dict],
+        citation_counter: int,
+    ) -> tuple:
         """Process citation tags to create inline clickable citations with enhanced distribution."""
-        
+
         # Find citation patterns
-        citation_pattern = r'<citation_name>(.*?)</citation_name><citation_url>(.*?)</citation_url>'
+        citation_pattern = (
+            r"<citation_name>(.*?)</citation_name><citation_url>(.*?)</citation_url>"
+        )
         matches = re.finditer(citation_pattern, content, re.DOTALL)
-        
+
         processed_content = content
-        
+
         for match in matches:
             citation_name = match.group(1).strip()
             citation_url = match.group(2).strip()
-            
+
             # Skip if citation is empty or invalid
             if not citation_name or not citation_url:
                 continue
-            
+
             # Create a clean title from citation name (limit length)
-            clean_title = citation_name[:50] + "..." if len(citation_name) > 50 else citation_name
-            
+            clean_title = (
+                citation_name[:50] + "..." if len(citation_name) > 50 else citation_name
+            )
+
             # Store citation for inline use
             citation_info = {
-                'number': citation_counter,
-                'name': clean_title,
-                'url': citation_url,
-                'full_name': citation_name
+                "number": citation_counter,
+                "name": clean_title,
+                "url": citation_url,
+                "full_name": citation_name,
             }
-            
+
             citations_dict[str(citation_counter)] = citation_info
             inline_citations.append(citation_info)
-            
+
             # Replace with inline clickable citation with enhanced formatting
-            citation_tag = f'<citation_name>{citation_name}</citation_name><citation_url>{citation_url}</citation_url>'
-            inline_citation = f'<link href="{citation_url}"><u>[{citation_counter}]</u></link>'
+            citation_tag = f"<citation_name>{citation_name}</citation_name><citation_url>{citation_url}</citation_url>"
+            inline_citation = (
+                f'<link href="{citation_url}"><u>[{citation_counter}]</u></link>'
+            )
             processed_content = processed_content.replace(citation_tag, inline_citation)
-            
+
             citation_counter += 1
-        
+
         return processed_content, citation_counter
 
     @staticmethod
     def _process_formatting_tags(content: str) -> str:
         """Process additional formatting tags like bold, italic, underline with enhanced support."""
-        
+
         # Process bold tags
-        content = re.sub(r'<bold>(.*?)</bold>', r'<b>\1</b>', content, flags=re.DOTALL | re.IGNORECASE)
-        
+        content = re.sub(
+            r"<bold>(.*?)</bold>",
+            r"<b>\1</b>",
+            content,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
         # Process italic tags
-        content = re.sub(r'<italic>(.*?)</italic>', r'<i>\1</i>', content, flags=re.DOTALL | re.IGNORECASE)
-        
+        content = re.sub(
+            r"<italic>(.*?)</italic>",
+            r"<i>\1</i>",
+            content,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
         # Process underline tags
-        content = re.sub(r'<underline>(.*?)</underline>', r'<u>\1</u>', content, flags=re.DOTALL | re.IGNORECASE)
-        
+        content = re.sub(
+            r"<underline>(.*?)</underline>",
+            r"<u>\1</u>",
+            content,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
         # Process bullet points
-        content = re.sub(r'<bullet>(.*?)</bullet>', r'• \1', content, flags=re.DOTALL | re.IGNORECASE)
-        
+        content = re.sub(
+            r"<bullet>(.*?)</bullet>", r"• \1", content, flags=re.DOTALL | re.IGNORECASE
+        )
+
         # Process numbered lists with sequential numbering
         number_counter = 1
+
         def replace_number(match):
             nonlocal number_counter
             result = f"{number_counter}. {match.group(1)}"
             number_counter += 1
             return result
-        
-        content = re.sub(r'<number>(.*?)</number>', replace_number, content, flags=re.DOTALL | re.IGNORECASE)
-        
+
+        content = re.sub(
+            r"<number>(.*?)</number>",
+            replace_number,
+            content,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
         # Process list containers
-        content = re.sub(r'<list>(.*?)</list>', r'\1', content, flags=re.DOTALL | re.IGNORECASE)
-        
+        content = re.sub(
+            r"<list>(.*?)</list>", r"\1", content, flags=re.DOTALL | re.IGNORECASE
+        )
+
         return content
+
 
 class ConsolidatedReportGenerator:
     """Generate consolidated comprehensive reports with enhanced XML formatting support."""
-    
+
     def __init__(self, model_manager: EnhancedModelManager):
         self.model_manager = model_manager
         self.web_scraper = WebScraper()
-        
+
         self.report_agent = Agent(
             model=model_manager.research_model,
-
             system_prompt="""You are a professional technical writer and business strategist. Your task is to generate comprehensive business reports for transformation use cases using XML-like tags for structured formatting.
 
                 Generate reports that are:
@@ -272,93 +325,119 @@ class ConsolidatedReportGenerator:
 
                 MANDATORY: Write detailed comprehensive analysis for EVERY use case provided. Each use case should have its own section with strategic analysis, implementation considerations, and business impact assessment using the XML formatting tags.""",
             tools=[http_request, retrieve],
-            conversation_manager=SlidingWindowConversationManager(window_size=20)
+            conversation_manager=SlidingWindowConversationManager(window_size=20),
         )
 
-    def generate_consolidated_report(self, company_profile: CompanyProfile, use_cases: List[UseCaseStructured], 
-                                   research_data: Dict[str, Any], session_id: str, status_tracker: StatusTracker = None,
-                                   parsed_files_content: str = None, custom_context: Dict[str, str] = None) -> Optional[str]:
+    def generate_consolidated_report(
+        self,
+        company_profile: CompanyProfile,
+        use_cases: List[UseCaseStructured],
+        research_data: Dict[str, Any],
+        session_id: str,
+        status_tracker: StatusTracker = None,
+        parsed_files_content: str = None,
+        custom_context: Dict[str, str] = None,
+    ) -> Optional[str]:
         """Generate consolidated PDF report with enhanced XML formatting and web scraping citations."""
-        
+
         if status_tracker:
             status_tracker.update_status(
                 StatusCheckpoints.REPORT_GENERATION_STARTED,
                 {
-                    'report_type': 'consolidated_comprehensive_analysis', 
-                    'use_case_count': len(use_cases), 
-                    'has_files': bool(parsed_files_content),
-                    'has_custom_context': bool(custom_context and custom_context.get('processed_prompt')),
-                    'web_citations_enabled': bool(research_data.get('web_research_data'))
+                    "report_type": "consolidated_comprehensive_analysis",
+                    "use_case_count": len(use_cases),
+                    "has_files": bool(parsed_files_content),
+                    "has_custom_context": bool(
+                        custom_context and custom_context.get("processed_prompt")
+                    ),
+                    "web_citations_enabled": bool(
+                        research_data.get("web_research_data")
+                    ),
                 },
-                current_agent='report_generator'
+                current_agent="report_generator",
             )
-        
+
         try:
             # Generate comprehensive report content with enhanced XML tags
             xml_report = self._generate_xml_report_with_enhanced_formatting(
-                company_profile, use_cases, research_data, parsed_files_content, custom_context
+                company_profile,
+                use_cases,
+                research_data,
+                parsed_files_content,
+                custom_context,
             )
-            
+
             # Generate and upload PDF
-            pdf_url = self._generate_and_upload_pdf_from_xml(xml_report, company_profile.name, session_id)
-            
+            pdf_url = self._generate_and_upload_pdf_from_xml(
+                xml_report, company_profile.name, session_id
+            )
+
             if status_tracker:
                 status_tracker.update_status(
                     StatusCheckpoints.REPORT_GENERATION_COMPLETED,
                     {
-                        's3_url': pdf_url, 
-                        'report_generated': bool(pdf_url), 
-                        'content_enhanced_with_files': bool(parsed_files_content),
-                        'content_aligned_with_custom_context': bool(custom_context and custom_context.get('processed_prompt')),
-                        'web_citations_included': bool(research_data.get('web_research_data'))
-                    }
+                        "s3_url": pdf_url,
+                        "report_generated": bool(pdf_url),
+                        "content_enhanced_with_files": bool(parsed_files_content),
+                        "content_aligned_with_custom_context": bool(
+                            custom_context and custom_context.get("processed_prompt")
+                        ),
+                        "web_citations_included": bool(
+                            research_data.get("web_research_data")
+                        ),
+                    },
                 )
-            
+
             return pdf_url
-            
+
         except Exception as e:
             logger.error(f"Error generating consolidated report: {e}")
             if status_tracker:
                 status_tracker.update_status(
                     StatusCheckpoints.ERROR,
-                    {'error_type': 'report_generation_error', 'error_message': str(e)}
+                    {"error_type": "report_generation_error", "error_message": str(e)},
                 )
             return None
 
-    def _generate_xml_report_with_enhanced_formatting(self, company_profile: CompanyProfile, use_cases: List[UseCaseStructured], 
-                                                    research_data: Dict[str, Any], parsed_files_content: str = None,
-                                                    custom_context: Dict[str, str] = None) -> str:
+    def _generate_xml_report_with_enhanced_formatting(
+        self,
+        company_profile: CompanyProfile,
+        use_cases: List[UseCaseStructured],
+        research_data: Dict[str, Any],
+        parsed_files_content: str = None,
+        custom_context: Dict[str, str] = None,
+    ) -> str:
         """Generate XML-tagged report with enhanced formatting and comprehensive use case analysis."""
-        
+
         # Get web research data for citations
-        web_research_data = research_data.get('web_research_data') or {}
-        scraped_results = web_research_data.get('scraped_results', [])
-        
+        web_research_data = research_data.get("web_research_data") or {}
+        scraped_results = web_research_data.get("scraped_results", [])
+
         # Process and prepare real citations from web scraping
         real_citations = self._prepare_real_citations_from_web_scraping(scraped_results)
-        
+
         # Web enhancement context
         web_context = ""
-        if web_research_data.get('successful_scrapes', 0) > 0:
+        if web_research_data.get("successful_scrapes", 0) > 0:
             web_context = f"""
 
-                **Web Intelligence Integration**: This report incorporates insights from {web_research_data['successful_scrapes']} web sources discovered through Google Search and scraped using Beautiful Soup, providing current market intelligence and industry trends."""
-        
+                **Web Intelligence Integration**: This report incorporates insights from {web_research_data["successful_scrapes"]} web sources discovered through Google Search and scraped using Beautiful Soup, providing current market intelligence and industry trends."""
+
         # File enhancement context
         file_context = ""
         if parsed_files_content:
             file_context = """
 
                 **Document Analysis Integration**: This report incorporates insights from uploaded company documents, providing detailed context about current operations, processes, and strategic priorities."""
-        
+
         # Custom context enhancement
         custom_context_section = ""
-        if custom_context and custom_context.get('processed_prompt'):
+        if custom_context and custom_context.get("processed_prompt"):
             custom_context_section = f"""
 
-                **Custom Context Alignment**: This analysis addresses the specified focus areas: {', '.join(custom_context.get('focus_areas', []))}. All recommendations align with the custom requirements and strategic priorities."""
-        
-        # Generate comprehensive XML report with enhanced formatting and real citations 
+                **Custom Context Alignment**: This analysis addresses the specified focus areas: {", ".join(custom_context.get("focus_areas", []))}. All recommendations align with the custom requirements and strategic priorities."""
+
+        # Generate comprehensive XML report with enhanced formatting and real citations
         xml_prompt = f""" 
 Generate a comprehensive business transformation report for **{company_profile.name}** using XML-like tags for structured formatting. 
 
@@ -389,7 +468,7 @@ CITATION TAGS:
 - Growth Stage: {company_profile.growth_stage}
 
 ### Research Intelligence:
-{research_data.get('research_findings', '')[:800]}
+{research_data.get("research_findings", "")[:800]}
 {web_context}
 {file_context}
 {custom_context_section}
@@ -426,7 +505,7 @@ CITATION TAGS:
 
 <paragraph><bold>Industry Transformation Drivers</bold>: Customer expectations for faster service delivery, regulatory compliance complexity, operational cost pressures, and talent shortage challenges. Companies leveraging AI for process automation report <underline>20-40% annual savings</underline> in operational costs {self._get_citation_tag(real_citations, 5)}.</paragraph>
 
-<paragraph><bold>Technology Maturity Assessment</bold>: {company_profile.name}'s <italic>{company_profile.cloud_maturity}</italic> maturity provides foundation for GenAI transformation using {', '.join(company_profile.technology_stack)}. Current infrastructure readiness enables rapid deployment with minimal additional investment in core technology stack.</paragraph>
+<paragraph><bold>Technology Maturity Assessment</bold>: {company_profile.name}'s <italic>{company_profile.cloud_maturity}</italic> maturity provides foundation for GenAI transformation using {", ".join(company_profile.technology_stack)}. Current infrastructure readiness enables rapid deployment with minimal additional investment in core technology stack.</paragraph>
 
 <paragraph><bold>Competitive Landscape Analysis</bold>: Market leaders are investing <underline>significantly</underline> in AI capabilities, creating competitive pressure for {company_profile.industry} organizations to accelerate digital transformation or risk market share erosion {self._get_citation_tag(real_citations, 6)}.</paragraph>
 
@@ -747,14 +826,21 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
         try:
             response = self.report_agent(xml_prompt)
             xml_content = str(response).strip()
-            
-            logger.info(f"Generated enhanced XML report with real citations: {len(xml_content)} characters")
+
+            logger.info(
+                f"Generated enhanced XML report with real citations: {len(xml_content)} characters"
+            )
             return xml_content
-            
+
         except Exception as e:
             logger.error(f"Error generating XML report: {e}")
             return self._create_fallback_xml_report_with_enhanced_formatting(
-                company_profile, use_cases, research_data, parsed_files_content, custom_context, scraped_results
+                company_profile,
+                use_cases,
+                research_data,
+                parsed_files_content,
+                custom_context,
+                scraped_results,
             )
 
     def _is_report_incomplete_or_repetitive(self, xml_content: str) -> bool:
@@ -762,28 +848,38 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
         # Check for common signs of incomplete reports
         if not xml_content or len(xml_content) < 1000:
             return True
-        
+
         # Check for repetition patterns
-        lines = xml_content.split('\n')
+        lines = xml_content.split("\n")
         unique_lines = set(lines)
-        if len(lines) > 0 and len(unique_lines) / len(lines) < 0.7:  # More than 30% repetition
+        if (
+            len(lines) > 0 and len(unique_lines) / len(lines) < 0.7
+        ):  # More than 30% repetition
             return True
-        
+
         # Check for incomplete sections
-        if not xml_content.endswith('</paragraph>') and not xml_content.endswith('</content>'):
+        if not xml_content.endswith("</paragraph>") and not xml_content.endswith(
+            "</content>"
+        ):
             return True
-        
+
         # Check for truncated content
-        if '...' in xml_content[-500:] or '...' in xml_content[-1000:]:
+        if "..." in xml_content[-500:] or "..." in xml_content[-1000:]:
             return True
-        
+
         return False
 
-    def _create_simplified_xml_prompt(self, company_profile: CompanyProfile, use_cases: List[UseCaseStructured], 
-                                    research_data: Dict[str, Any], parsed_files_content: str = None,
-                                    custom_context: Dict[str, str] = None, real_citations: List[Dict] = None) -> str:
+    def _create_simplified_xml_prompt(
+        self,
+        company_profile: CompanyProfile,
+        use_cases: List[UseCaseStructured],
+        research_data: Dict[str, Any],
+        parsed_files_content: str = None,
+        custom_context: Dict[str, str] = None,
+        real_citations: List[Dict] = None,
+    ) -> str:
         """Create a simplified XML prompt to prevent token limit issues."""
-        
+
         return f"""
                 Generate a concise but comprehensive business transformation report for **{company_profile.name}** using XML-like tags.
 
@@ -815,74 +911,127 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
                 Use citations: {self._format_real_citations_for_prompt(real_citations or [])}
             """
 
-    def _prepare_real_citations_from_web_scraping(self, scraped_results: List[Dict]) -> List[Dict]:
+    def _prepare_real_citations_from_web_scraping(
+        self, scraped_results: List[Dict]
+    ) -> List[Dict]:
         """Prepare real citations from web scraping results."""
         real_citations = []
-        
+
         if not scraped_results:
             # Fallback citations if no web scraping results
             fallback_citations = [
-                {'name': 'McKinsey Digital Transformation Research', 'url': 'https://www.mckinsey.com/capabilities/mckinsey-digital'},
-                {'name': 'Deloitte Technology Transformation', 'url': 'https://www.deloitte.com/global/en/services/consulting/services/technology-transformation.html'},
-                {'name': 'AWS Digital Transformation Guide', 'url': 'https://aws.amazon.com/digital-transformation/'},
-                {'name': 'PwC Digital Strategy Framework', 'url': 'https://www.pwc.com/us/en/services/consulting/digital-strategy.html'},
-                {'name': 'BCG Digital Transformation', 'url': 'https://www.bcg.com/capabilities/digital-technology-data/digital-transformation'},
-                {'name': 'Gartner Technology Trends', 'url': 'https://www.gartner.com/en/topics/technology-trends'},
-                {'name': 'Forrester Digital Transformation', 'url': 'https://www.forrester.com/report-category/digital-transformation/'},
-                {'name': 'IDC Technology Research', 'url': 'https://www.idc.com/getdoc.jsp?containerId=prUS48907623'},
-                {'name': 'Accenture Technology Vision', 'url': 'https://www.accenture.com/us-en/insights/technology/technology-trends-2024'},
-                {'name': 'KPMG Digital Transformation', 'url': 'https://home.kpmg/xx/en/home/insights/2020/04/digital-transformation.html'},
-                {'name': 'EY Technology Consulting', 'url': 'https://www.ey.com/en_us/technology-consulting'},
-                {'name': 'Bain Digital Transformation', 'url': 'https://www.bain.com/insights/topics/digital-transformation/'},
-                {'name': 'Strategy& Digital Strategy', 'url': 'https://www.strategyand.pwc.com/gx/en/unique-solutions/digital-transformation.html'},
-                {'name': 'Capgemini Digital Innovation', 'url': 'https://www.capgemini.com/services/digital-innovation/'}
+                {
+                    "name": "McKinsey Digital Transformation Research",
+                    "url": "https://www.mckinsey.com/capabilities/mckinsey-digital",
+                },
+                {
+                    "name": "Deloitte Technology Transformation",
+                    "url": "https://www.deloitte.com/global/en/services/consulting/services/technology-transformation.html",
+                },
+                {
+                    "name": "AWS Digital Transformation Guide",
+                    "url": "https://aws.amazon.com/digital-transformation/",
+                },
+                {
+                    "name": "PwC Digital Strategy Framework",
+                    "url": "https://www.pwc.com/us/en/services/consulting/digital-strategy.html",
+                },
+                {
+                    "name": "BCG Digital Transformation",
+                    "url": "https://www.bcg.com/capabilities/digital-technology-data/digital-transformation",
+                },
+                {
+                    "name": "Gartner Technology Trends",
+                    "url": "https://www.gartner.com/en/topics/technology-trends",
+                },
+                {
+                    "name": "Forrester Digital Transformation",
+                    "url": "https://www.forrester.com/report-category/digital-transformation/",
+                },
+                {
+                    "name": "IDC Technology Research",
+                    "url": "https://www.idc.com/getdoc.jsp?containerId=prUS48907623",
+                },
+                {
+                    "name": "Accenture Technology Vision",
+                    "url": "https://www.accenture.com/us-en/insights/technology/technology-trends-2024",
+                },
+                {
+                    "name": "KPMG Digital Transformation",
+                    "url": "https://home.kpmg/xx/en/home/insights/2020/04/digital-transformation.html",
+                },
+                {
+                    "name": "EY Technology Consulting",
+                    "url": "https://www.ey.com/en_us/technology-consulting",
+                },
+                {
+                    "name": "Bain Digital Transformation",
+                    "url": "https://www.bain.com/insights/topics/digital-transformation/",
+                },
+                {
+                    "name": "Strategy& Digital Strategy",
+                    "url": "https://www.strategyand.pwc.com/gx/en/unique-solutions/digital-transformation.html",
+                },
+                {
+                    "name": "Capgemini Digital Innovation",
+                    "url": "https://www.capgemini.com/services/digital-innovation/",
+                },
             ]
             return fallback_citations
-        
+
         # Process real scraped results
         for result in scraped_results:
-            if result.get('success') and result.get('url') and result.get('title'):
+            if result.get("success") and result.get("url") and result.get("title"):
                 # Clean and validate the citation
-                title = result.get('title', '').strip()
-                url = result.get('url', '').strip()
-                
+                title = result.get("title", "").strip()
+                url = result.get("url", "").strip()
+
                 # Skip if title is too short or URL is invalid
-                if len(title) < 10 or not url.startswith('http'):
+                if len(title) < 10 or not url.startswith("http"):
                     continue
-                
+
                 # Clean title (remove common prefixes)
-                title = re.sub(r'^(Home|About|Contact|Services|Products)\s*[-|]?\s*', '', title)
-                
+                title = re.sub(
+                    r"^(Home|About|Contact|Services|Products)\s*[-|]?\s*", "", title
+                )
+
                 # Limit title length
                 if len(title) > 80:
                     title = title[:77] + "..."
-                
-                real_citations.append({
-                    'name': title,
-                    'url': url,
-                    'full_name': result.get('title', title)
-                })
-        
+
+                real_citations.append(
+                    {"name": title, "url": url, "full_name": result.get("title", title)}
+                )
+
         # If we don't have enough real citations, add some fallbacks
         if len(real_citations) < 5:
             fallback_citations = [
-                {'name': 'McKinsey Digital Transformation Research', 'url': 'https://www.mckinsey.com/capabilities/mckinsey-digital'},
-                {'name': 'Deloitte Technology Transformation', 'url': 'https://www.deloitte.com/global/en/services/consulting/services/technology-transformation.html'},
-                {'name': 'AWS Digital Transformation Guide', 'url': 'https://aws.amazon.com/digital-transformation/'}
+                {
+                    "name": "McKinsey Digital Transformation Research",
+                    "url": "https://www.mckinsey.com/capabilities/mckinsey-digital",
+                },
+                {
+                    "name": "Deloitte Technology Transformation",
+                    "url": "https://www.deloitte.com/global/en/services/consulting/services/technology-transformation.html",
+                },
+                {
+                    "name": "AWS Digital Transformation Guide",
+                    "url": "https://aws.amazon.com/digital-transformation/",
+                },
             ]
             real_citations.extend(fallback_citations)
-        
+
         return real_citations
 
     def _format_real_citations_for_prompt(self, real_citations: List[Dict]) -> str:
         """Format real citations for the prompt."""
         if not real_citations:
             return "No real citations available - using fallback citations"
-        
+
         citations_text = "REAL WEB CITATIONS TO USE THROUGHOUT THE REPORT:\n"
         for i, citation in enumerate(real_citations[:15], 1):  # Limit to first 15
             citations_text += f"{i}. {citation['name']} - {citation['url']}\n"
-        
+
         return citations_text
 
     def _get_citation_tag(self, real_citations: List[Dict], index: int) -> str:
@@ -890,39 +1039,47 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
         if not real_citations or index >= len(real_citations):
             # Return empty string if no citations available
             return ""
-        
-        citation = real_citations[index % len(real_citations)]
-        return f'<citation_name>{citation["name"]}</citation_name><citation_url>{citation["url"]}</citation_url>'
 
-    def _format_use_cases_as_bullet_list(self, use_cases: List[UseCaseStructured]) -> str:
+        citation = real_citations[index % len(real_citations)]
+        return f"<citation_name>{citation['name']}</citation_name><citation_url>{citation['url']}</citation_url>"
+
+    def _format_use_cases_as_bullet_list(
+        self, use_cases: List[UseCaseStructured]
+    ) -> str:
         """Format use cases as a properly formatted bullet list with bold titles and descriptions."""
         bullet_list = []
-        
+
         for uc in use_cases:
             # Create a clean bullet point with bold title and description
-            bullet_point = f'<bullet><bold>{uc.title}</bold> - {uc.category}: {uc.business_value}</bullet>'
+            bullet_point = f"<bullet><bold>{uc.title}</bold> - {uc.category}: {uc.business_value}</bullet>"
             bullet_list.append(bullet_point)
-        
-        return '\n'.join(bullet_list)
+
+        return "\n".join(bullet_list)
 
     def _format_available_citations(self, scraped_results: List[Dict]) -> str:
         """Format available citations for the prompt."""
         if not scraped_results:
             return "No web citations available"
-        
+
         citations = []
         for i, result in enumerate(scraped_results[:10], 1):  # Limit to first 10
-            if result.get('success') and result.get('url'):
-                title = result.get('title', 'Web Source')[:60]
-                url = result.get('url')
+            if result.get("success") and result.get("url"):
+                title = result.get("title", "Web Source")[:60]
+                url = result.get("url")
                 citations.append(f"{i}. {title} - {url}")
-        
-        return "Available web citations:\n" + "\n".join(citations) if citations else "No valid citations available"
 
-    def _format_all_use_cases_for_comprehensive_analysis(self, use_cases: List[UseCaseStructured]) -> str:
+        return (
+            "Available web citations:\n" + "\n".join(citations)
+            if citations
+            else "No valid citations available"
+        )
+
+    def _format_all_use_cases_for_comprehensive_analysis(
+        self, use_cases: List[UseCaseStructured]
+    ) -> str:
         """Format ALL use cases for comprehensive analysis in the XML report prompt."""
         formatted_cases = []
-        
+
         for i, uc in enumerate(use_cases, 1):
             formatted_cases.append(f"""
             {i}. **{uc.title}**
@@ -930,16 +1087,16 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
                - Current State: {uc.current_state}
                - Proposed Solution: {uc.proposed_solution}
                - Business Value: {uc.business_value}
-               - AWS Services: {', '.join(uc.primary_aws_services)}
-               - Implementation Phases: {', '.join(uc.implementation_phases)}
+               - AWS Services: {", ".join(uc.primary_aws_services)}
+               - Implementation Phases: {", ".join(uc.implementation_phases)}
                - Timeline: {uc.timeline_months} months
                - Monthly Cost: ${uc.monthly_cost_usd:,}
                - Priority: {uc.priority}
                - Complexity: {uc.complexity}
                - Risk Level: {uc.risk_level}
-               - Success Metrics: {', '.join(uc.success_metrics)}
+               - Success Metrics: {", ".join(uc.success_metrics)}
             """)
-        
+
         return f"""
         COMPREHENSIVE USE CASE ANALYSIS REQUIRED FOR ALL {len(use_cases)} INITIATIVES:
         
@@ -948,46 +1105,87 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
         MANDATORY: Each use case listed above MUST have its own detailed section in the report with comprehensive strategic analysis, technical considerations, business impact assessment, and implementation recommendations using enhanced XML formatting.
         """
 
-    def _create_fallback_xml_report_with_enhanced_formatting(self, company_profile: CompanyProfile, 
-                                                           use_cases: List[UseCaseStructured],
-                                                           research_data: Dict[str, Any], 
-                                                           parsed_files_content: str = None,
-                                                           custom_context: Dict[str, str] = None, 
-                                                           scraped_results: List[Dict] = None) -> str:
+    def _create_fallback_xml_report_with_enhanced_formatting(
+        self,
+        company_profile: CompanyProfile,
+        use_cases: List[UseCaseStructured],
+        research_data: Dict[str, Any],
+        parsed_files_content: str = None,
+        custom_context: Dict[str, str] = None,
+        scraped_results: List[Dict] = None,
+    ) -> str:
         """Create fallback XML report with enhanced formatting and comprehensive use case analysis."""
-        
+
         enhancement_notes = []
-        web_research_data_fallback = research_data.get('web_research_data') or {}
-        if web_research_data_fallback.get('successful_scrapes', 0) > 0:
-            enhancement_notes.append(f"Enhanced with Web Intelligence from {web_research_data_fallback.get('successful_scrapes', 0)} sources")
+        web_research_data_fallback = research_data.get("web_research_data") or {}
+        if web_research_data_fallback.get("successful_scrapes", 0) > 0:
+            enhancement_notes.append(
+                f"Enhanced with Web Intelligence from {web_research_data_fallback.get('successful_scrapes', 0)} sources"
+            )
         if parsed_files_content:
             enhancement_notes.append("Enhanced with Document Analysis")
-        if custom_context and custom_context.get('processed_prompt'):
-            enhancement_notes.append(f"Aligned with Custom Context ({custom_context.get('context_type', 'general')})")
-        
+        if custom_context and custom_context.get("processed_prompt"):
+            enhancement_notes.append(
+                f"Aligned with Custom Context ({custom_context.get('context_type', 'general')})"
+            )
+
         enhancement = f" ({', '.join(enhancement_notes)})" if enhancement_notes else ""
-        
+
         # Get citation URLs from scraped results or use enhanced fallback citations
-        citations = self._prepare_real_citations_from_web_scraping(scraped_results) if scraped_results else []
-        
+        citations = (
+            self._prepare_real_citations_from_web_scraping(scraped_results)
+            if scraped_results
+            else []
+        )
+
         # Generate properly formatted use case bullet list
         use_case_bullets = self._format_use_cases_as_bullet_list(use_cases)
-        
+
         # Generate comprehensive use case sections with enhanced formatting and better citation distribution
         use_case_sections = []
         for i, uc in enumerate(use_cases, 1):
             # Use different citations for different aspects of each use case
-            citation_ref = citations[i % len(citations)] if citations else citations[0] if citations else None
-            citation_1 = citations[(i * 2) % len(citations)] if citations else citations[0] if citations else None
-            citation_2 = citations[(i * 3) % len(citations)] if citations else citations[1] if citations else None
-            citation_3 = citations[(i * 4) % len(citations)] if citations else citations[2] if citations else None
-            
+            citation_ref = (
+                citations[i % len(citations)]
+                if citations
+                else citations[0]
+                if citations
+                else None
+            )
+            citation_1 = (
+                citations[(i * 2) % len(citations)]
+                if citations
+                else citations[0]
+                if citations
+                else None
+            )
+            citation_2 = (
+                citations[(i * 3) % len(citations)]
+                if citations
+                else citations[1]
+                if citations
+                else None
+            )
+            citation_3 = (
+                citations[(i * 4) % len(citations)]
+                if citations
+                else citations[2]
+                if citations
+                else None
+            )
+
             # Create citation tags
             citation_tag = self._get_citation_tag(citations, i) if citations else ""
-            citation_tag_1 = self._get_citation_tag(citations, i * 2) if citations else ""
-            citation_tag_2 = self._get_citation_tag(citations, i * 3) if citations else ""
-            citation_tag_3 = self._get_citation_tag(citations, i * 4) if citations else ""
-            
+            citation_tag_1 = (
+                self._get_citation_tag(citations, i * 2) if citations else ""
+            )
+            citation_tag_2 = (
+                self._get_citation_tag(citations, i * 3) if citations else ""
+            )
+            citation_tag_3 = (
+                self._get_citation_tag(citations, i * 4) if citations else ""
+            )
+
             use_case_section = f"""
                 <sub-heading>3.{i}: Use Case - {uc.title}</sub-heading>
 
@@ -998,17 +1196,17 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
                 <paragraph><bold>Proposed Transformation Solution and Technical Architecture</bold>: {uc.proposed_solution} This comprehensive approach leverages <italic>proven methodologies</italic> and cutting-edge technologies to deliver measurable business outcomes {citation_tag_2}.</paragraph>
 
                 <list>
-                <bullet><bold>Technology Architecture and AWS Services</bold>: Utilizes {', '.join(uc.primary_aws_services)} as core components for scalable and reliable implementation</bullet>
+                <bullet><bold>Technology Architecture and AWS Services</bold>: Utilizes {", ".join(uc.primary_aws_services)} as core components for scalable and reliable implementation</bullet>
                 <bullet><bold>Business Value and ROI Projections</bold>: {uc.business_value} with projected ROI of 200-400% within 18-24 months</bullet>
                 <bullet><bold>Implementation Strategy and Phases</bold>: {uc.timeline_months}-month phased approach with clear milestones and deliverables</bullet>
-                <bullet><bold>Success Metrics and KPIs</bold>: {', '.join(uc.success_metrics)} providing clear performance indicators and accountability mechanisms</bullet>
+                <bullet><bold>Success Metrics and KPIs</bold>: {", ".join(uc.success_metrics)} providing clear performance indicators and accountability mechanisms</bullet>
                 <bullet><bold>Risk Assessment and Mitigation</bold>: {uc.risk_level} risk profile with comprehensive mitigation strategies including testing, stakeholder engagement, and phased rollout</bullet>
                 <bullet><bold>Resource Requirements and Team Structure</bold>: Cross-functional team with expertise in AWS, business analysis, and change management</bullet>
                 </list>
 
-                <paragraph><bold>Implementation Roadmap and Timeline</bold>: The {uc.timeline_months}-month implementation follows a structured approach: {', '.join(uc.implementation_phases)}. Each phase builds upon previous successes while minimizing business disruption and maximizing value realization {citation_tag_3}.</paragraph>
+                <paragraph><bold>Implementation Roadmap and Timeline</bold>: The {uc.timeline_months}-month implementation follows a structured approach: {", ".join(uc.implementation_phases)}. Each phase builds upon previous successes while minimizing business disruption and maximizing value realization {citation_tag_3}.</paragraph>
 
-                <paragraph><bold>Expected Business Outcomes and Success Metrics</bold>: Success will be measured through comprehensive KPIs including {', '.join(uc.success_metrics)}, providing clear performance indicators and accountability mechanisms. These metrics align with industry standards for <italic>{company_profile.industry}</italic> transformation initiatives and enable continuous improvement throughout the implementation journey.</paragraph>
+                <paragraph><bold>Expected Business Outcomes and Success Metrics</bold>: Success will be measured through comprehensive KPIs including {", ".join(uc.success_metrics)}, providing clear performance indicators and accountability mechanisms. These metrics align with industry standards for <italic>{company_profile.industry}</italic> transformation initiatives and enable continuous improvement throughout the implementation journey.</paragraph>
 
                 <paragraph><bold>Risk Assessment and Mitigation Strategies</bold>: With a {uc.risk_level} risk profile and <italic>{uc.complexity} complexity level</italic>, this initiative requires careful planning and execution. Mitigation strategies include comprehensive testing, stakeholder engagement, phased rollout approaches, continuous monitoring and adjustment, and robust fallback procedures to ensure business continuity.</paragraph>
 
@@ -1016,9 +1214,9 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
 
                 <paragraph><bold>Strategic Alignment and Business Impact</bold>: This initiative directly addresses {company_profile.name}'s core business challenges while building long-term competitive advantages. The transformation will create measurable business value through improved operational efficiency, enhanced customer experience, and increased market competitiveness, positioning the organization for sustained growth and success.</paragraph>
             """
-                    
+
             use_case_sections.append(use_case_section)
-            
+
             # Combine all sections into the full report with enhanced formatting and better citation distribution
             full_report = f"""<heading_bold>Comprehensive GenAI Transformation Strategy for {company_profile.name}{enhancement}</heading_bold>
 
@@ -1046,7 +1244,7 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
 
                 <sub-heading-bold>Section 3: Detailed Use Case Analysis</sub-heading-bold>
 
-                {''.join(use_case_sections)}
+                {"".join(use_case_sections)}
 
                 <sub-heading-bold>Section 4: Implementation Roadmap and Strategic Recommendations</sub-heading-bold>
 
@@ -1135,317 +1333,340 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
                 <paragraph><bold>6–12 Month Horizon</bold>: Scale deployments, refine governance, validate ROI, and expand use case portfolio.</paragraph>
             """
 
-        
         return full_report
 
-    def _generate_and_upload_pdf_from_xml(self, xml_content: str, company_name: str, session_id: str) -> Optional[str]:
+    def _generate_and_upload_pdf_from_xml(
+        self, xml_content: str, company_name: str, session_id: str
+    ) -> Optional[str]:
         """Generate PDF from enhanced XML content and upload to S3."""
-        
+
         try:
             # Parse XML content with enhanced formatting support
             parsed_content = ReportXMLParser.parse_xml_tags(xml_content)
-            
+
             # Create temp directory
             tmp_dir = os.path.join(LAMBDA_TMP_DIR, session_id)
             os.makedirs(tmp_dir, exist_ok=True)
-            
-            pdf_filename = os.path.join(tmp_dir, f"transformation_report_{session_id}.pdf")
-            
+
+            pdf_filename = os.path.join(
+                tmp_dir, f"transformation_report_{session_id}.pdf"
+            )
+
             if REPORTLAB_AVAILABLE:
                 # Use ReportLab to create professional PDF with enhanced formatting
-                self._create_professional_pdf_with_enhanced_formatting(parsed_content, pdf_filename, company_name)
-                logger.info(f"✅ Enhanced PDF generated using ReportLab: {pdf_filename}")
-                
+                self._create_professional_pdf_with_enhanced_formatting(
+                    parsed_content, pdf_filename, company_name
+                )
+                logger.info(
+                    f"✅ Enhanced PDF generated using ReportLab: {pdf_filename}"
+                )
+
             else:
                 logger.error("❌ No PDF generation libraries available")
                 return None
-            
+
             # Verify PDF was created
             if not os.path.exists(pdf_filename) or os.path.getsize(pdf_filename) == 0:
                 logger.error("❌ PDF file was not created or is empty")
                 return None
-            
+
             # Save a local copy in ./reports directory
-            
-         #   try:
-                # Create the local reports directory if it doesn't exist
-               # local_reports_dir = os.path.join(os.getcwd(), "reports")
-               # os.makedirs(local_reports_dir, exist_ok=True)
-                # Generate a timestamp for the filename
-               # ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-                # Sanitize the company name for safe filenames
-               # safe_company = re.sub(r"[^A-Za-z0-9_-]+", "_", company_name).strip("_")
-                # Build the local PDF path
-               # local_pdf_path = os.path.join(local_reports_dir, f"{safe_company}_transformation_report_{session_id}_{ts}.pdf")
-                # Copy the generated PDF to the local reports directory
-                # shutil.copyfile(pdf_filename, local_pdf_path)
-               # logger.info(f"💾 Local PDF saved at: {local_pdf_path}")
-           # except Exception as e:
-              #  logger.warning(f"Failed to save local PDF copy: {e}")
-                
-            
+
+            #   try:
+            # Create the local reports directory if it doesn't exist
+            # local_reports_dir = os.path.join(os.getcwd(), "reports")
+            # os.makedirs(local_reports_dir, exist_ok=True)
+            # Generate a timestamp for the filename
+            # ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            # Sanitize the company name for safe filenames
+            # safe_company = re.sub(r"[^A-Za-z0-9_-]+", "_", company_name).strip("_")
+            # Build the local PDF path
+            # local_pdf_path = os.path.join(local_reports_dir, f"{safe_company}_transformation_report_{session_id}_{ts}.pdf")
+            # Copy the generated PDF to the local reports directory
+            # shutil.copyfile(pdf_filename, local_pdf_path)
+            # logger.info(f"💾 Local PDF saved at: {local_pdf_path}")
+            # except Exception as e:
+            #  logger.warning(f"Failed to save local PDF copy: {e}")
+
             # Upload to S3
             s3_url = self._upload_pdf_to_s3(pdf_filename, session_id, company_name)
-            
+
             # Cleanup
             try:
                 if os.path.exists(pdf_filename):
                     os.unlink(pdf_filename)
             except Exception as e:
                 logger.warning(f"Failed to cleanup PDF file: {e}")
-            
+
             return s3_url
-            
+
         except Exception as e:
             logger.error(f"❌ Enhanced PDF generation failed: {e}")
             return None
 
-    def _create_professional_pdf_with_enhanced_formatting(self, parsed_content: Dict[str, Any], pdf_filename: str, company_name: str):
+    def _create_professional_pdf_with_enhanced_formatting(
+        self, parsed_content: Dict[str, Any], pdf_filename: str, company_name: str
+    ):
         """Create professional PDF using ReportLab with enhanced formatting support."""
-        
+
         from reportlab.lib.pagesizes import A4
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import inch
         from reportlab.lib.colors import black, blue, HexColor
         from reportlab.platypus.flowables import HRFlowable
-        
+
         # Create PDF document
         doc = SimpleDocTemplate(
-            pdf_filename, 
+            pdf_filename,
             pagesize=A4,
-            rightMargin=0.75*inch, 
-            leftMargin=0.75*inch,
-            topMargin=0.75*inch, 
-            bottomMargin=0.75*inch
+            rightMargin=0.75 * inch,
+            leftMargin=0.75 * inch,
+            topMargin=0.75 * inch,
+            bottomMargin=0.75 * inch,
         )
-        
+
         # Get base styles
         styles = getSampleStyleSheet()
-        
+
         # Create enhanced custom styles
         title_style = ParagraphStyle(
-            'ReportTitle',
-            parent=styles['Title'],
+            "ReportTitle",
+            parent=styles["Title"],
             fontSize=22,
             spaceAfter=30,
             spaceBefore=20,
-            textColor=HexColor('#2C3E50'),
-            fontName='Helvetica-Bold',
+            textColor=HexColor("#2C3E50"),
+            fontName="Helvetica-Bold",
             alignment=0,
-            leading=26
+            leading=26,
         )
-        
+
         # Enhanced heading styles
         main_heading_style = ParagraphStyle(
-            'MainHeading',
-            parent=styles['Heading1'],
+            "MainHeading",
+            parent=styles["Heading1"],
             fontSize=18,
             spaceAfter=20,
             spaceBefore=28,
-            textColor=HexColor('#34495E'),
-            fontName='Helvetica-Bold',
+            textColor=HexColor("#34495E"),
+            fontName="Helvetica-Bold",
             alignment=0,
-            leading=20
+            leading=20,
         )
-        
+
         sub_heading_bold_style = ParagraphStyle(
-            'SubHeadingBold',
-            parent=styles['Heading2'],
+            "SubHeadingBold",
+            parent=styles["Heading2"],
             fontSize=16,
             spaceAfter=18,
             spaceBefore=24,
-            textColor=HexColor('#2C3E50'),
-            fontName='Helvetica-Bold',
+            textColor=HexColor("#2C3E50"),
+            fontName="Helvetica-Bold",
             alignment=0,
-            leading=18
+            leading=18,
         )
-        
+
         sub_heading_style = ParagraphStyle(
-            'SubHeading',
-            parent=styles['Heading3'],
+            "SubHeading",
+            parent=styles["Heading3"],
             fontSize=14,
             spaceAfter=14,
             spaceBefore=18,
-            textColor=HexColor('#34495E'),
-            fontName='Helvetica-Bold',
+            textColor=HexColor("#34495E"),
+            fontName="Helvetica-Bold",
             alignment=0,
-            leading=16
+            leading=16,
         )
-        
+
         # Enhanced content styles
         content_style = ParagraphStyle(
-            'ContentText',
-            parent=styles['Normal'],
+            "ContentText",
+            parent=styles["Normal"],
             fontSize=11,
             spaceAfter=12,
             spaceBefore=6,
             alignment=4,  # Justified
             textColor=black,
-            fontName='Helvetica',
+            fontName="Helvetica",
             leading=16,
             leftIndent=0,
-            rightIndent=0
+            rightIndent=0,
         )
-        
+
         paragraph_style = ParagraphStyle(
-            'ParagraphText',
+            "ParagraphText",
             parent=content_style,
             fontSize=11,
             spaceAfter=10,
             spaceBefore=4,
             alignment=4,
-            leading=15
+            leading=15,
         )
-        
+
         # List styles
         bullet_style = ParagraphStyle(
-            'BulletText',
+            "BulletText",
             parent=content_style,
             fontSize=11,
             spaceAfter=6,
             spaceBefore=3,
             leftIndent=20,
             bulletIndent=10,
-            leading=14
+            leading=14,
         )
-        
+
         # Build story
         story = []
-        
+
         # Add title
-        title = parsed_content.get('title', f'GenAI Transformation Strategy for {company_name}')
+        title = parsed_content.get(
+            "title", f"GenAI Transformation Strategy for {company_name}"
+        )
         story.append(Paragraph(title, title_style))
         story.append(Spacer(1, 20))
-        
+
         # Add horizontal rule
-        story.append(HRFlowable(width="100%", thickness=2, color=HexColor('#3498DB')))
+        story.append(HRFlowable(width="100%", thickness=2, color=HexColor("#3498DB")))
         story.append(Spacer(1, 20))
-        
+
         # Process content sections with enhanced formatting
-        for section in parsed_content.get('sections', []):
-            if section.get('content', '').strip():
-                section_type = section.get('type', 'content')
-                section_content = section.get('content', '')
-                
+        for section in parsed_content.get("sections", []):
+            if section.get("content", "").strip():
+                section_type = section.get("type", "content")
+                section_content = section.get("content", "")
+
                 # Clean content for PDF and enhance inline citations
                 cleaned_content = self._enhance_inline_citations_for_pdf(
-                    section_content, 
-                    parsed_content.get('citations', {})
+                    section_content, parsed_content.get("citations", {})
                 )
-                
+
                 # Apply appropriate style based on section type
-                if section_type == 'heading_bold':
+                if section_type == "heading_bold":
                     story.append(Paragraph(cleaned_content, main_heading_style))
-                elif section_type == 'sub-heading-bold':
+                elif section_type == "sub-heading-bold":
                     story.append(Paragraph(cleaned_content, sub_heading_bold_style))
-                elif section_type == 'sub-heading':
+                elif section_type == "sub-heading":
                     story.append(Paragraph(cleaned_content, sub_heading_style))
-                elif section_type == 'paragraph':
+                elif section_type == "paragraph":
                     story.append(Paragraph(cleaned_content, paragraph_style))
-                elif section_type == 'content':
+                elif section_type == "content":
                     story.append(Paragraph(cleaned_content, content_style))
-                elif section_type == 'list':
+                elif section_type == "list":
                     # Process list items within the list - handle both bullet points and numbered items
                     # Split by bullet points first
-                    bullet_items = [item.strip() for item in cleaned_content.split('•') if item.strip()]
+                    bullet_items = [
+                        item.strip()
+                        for item in cleaned_content.split("•")
+                        if item.strip()
+                    ]
                     for item in bullet_items:
                         if item:
                             story.append(Paragraph(f"• {item}", bullet_style))
-                    
+
                     # Also handle numbered items if they exist
-                    numbered_items = re.findall(r'\d+\.\s*(.*?)(?=\d+\.|$)', cleaned_content, re.DOTALL)
+                    numbered_items = re.findall(
+                        r"\d+\.\s*(.*?)(?=\d+\.|$)", cleaned_content, re.DOTALL
+                    )
                     for item in numbered_items:
                         if item.strip():
                             story.append(Paragraph(f"• {item.strip()}", bullet_style))
                 else:
                     # Default to content style
                     story.append(Paragraph(cleaned_content, content_style))
-                
+
                 story.append(Spacer(1, 8))
-        
+
         # Add citation summary section
-        citations = parsed_content.get('citations', {})
+        citations = parsed_content.get("citations", {})
         if citations:
             story.append(Spacer(1, 20))
-            story.append(HRFlowable(width="100%", thickness=1, color=HexColor('#BDC3C7')))
+            story.append(
+                HRFlowable(width="100%", thickness=1, color=HexColor("#BDC3C7"))
+            )
             story.append(Spacer(1, 15))
             story.append(Paragraph("Citation Sources", sub_heading_bold_style))
             story.append(Spacer(1, 10))
-            
+
             for citation_num, citation_info in citations.items():
-                citation_name = citation_info.get('full_name', citation_info.get('name', 'Source'))
-                citation_url = citation_info.get('url', '#')
-                
+                citation_name = citation_info.get(
+                    "full_name", citation_info.get("name", "Source")
+                )
+                citation_url = citation_info.get("url", "#")
+
                 # Create reference entry
                 citation_text = f'[{citation_num}] <link href="{citation_url}">{citation_url}</link>'
                 story.append(Paragraph(citation_text, content_style))
                 story.append(Spacer(1, 4))
-        
+
         # Build PDF
         doc.build(story)
 
-    def _enhance_inline_citations_for_pdf(self, content: str, citations: Dict[str, Any]) -> str:
+    def _enhance_inline_citations_for_pdf(
+        self, content: str, citations: Dict[str, Any]
+    ) -> str:
         """Enhance inline citations and formatting tags for PDF generation with better distribution."""
-        
+
         # Remove any remaining XML content tags
-        content = re.sub(r'</?content>', '', content)
-        content = re.sub(r'</?paragraph>', '', content)
-        content = re.sub(r'</?section>', '', content)
-        
+        content = re.sub(r"</?content>", "", content)
+        content = re.sub(r"</?paragraph>", "", content)
+        content = re.sub(r"</?section>", "", content)
+
         # Enhance existing link tags to have round appearance
         def enhance_citation_link(match):
             href = match.group(1)
             citation_num = match.group(2)
-            
+
             # Find citation info
             citation_info = citations.get(citation_num, {})
-            citation_name = citation_info.get('name', 'Source')
-            
+            citation_name = citation_info.get("name", "Source")
+
             # Create enhanced round citation with background color
             return f'<link href="{href}"><b><font face="Helvetica-Bold" size="8">&nbsp;[{citation_num}]&nbsp;</font></b></link>'
-        
+
         # Pattern to find existing citation links
         citation_link_pattern = r'<link href="([^"]*)"><u>\[(\d+)\]</u></link>'
         content = re.sub(citation_link_pattern, enhance_citation_link, content)
-        
+
         # Clean up extra whitespace and formatting
-        content = re.sub(r'\s+', ' ', content).strip()
-        
+        content = re.sub(r"\s+", " ", content).strip()
+
         # Ensure proper spacing around citations
-        content = re.sub(r'(\w)\[(\d+)\]', r'\1 [\2]', content)
-        content = re.sub(r'\[(\d+)\](\w)', r'[\1] \2', content)
-        
+        content = re.sub(r"(\w)\[(\d+)\]", r"\1 [\2]", content)
+        content = re.sub(r"\[(\d+)\](\w)", r"[\1] \2", content)
+
         return content
 
-    def _upload_pdf_to_s3(self, pdf_path: str, session_id: str, company_name: str) -> Optional[str]:
+    def _upload_pdf_to_s3(
+        self, pdf_path: str, session_id: str, company_name: str
+    ) -> Optional[str]:
         """Upload PDF to S3 and return object URL."""
         try:
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             s3_key = f"transformation-reports/{session_id}/comprehensive-analysis/{timestamp}_transformation_report.pdf"
-            
+
             # Upload to S3
             s3_client.upload_file(
                 pdf_path,
                 S3_BUCKET,
                 s3_key,
                 ExtraArgs={
-                    'ContentType': 'application/pdf',
-                    'Metadata': {
-                        'session_id': session_id,
-                        'company_name': company_name,
-                        'report_type': 'comprehensive_transformation_analysis_with_enhanced_formatting',
-                        'generated_at': timestamp
-                    }
-                }
+                    "ContentType": "application/pdf",
+                    "Metadata": {
+                        "session_id": session_id,
+                        "company_name": company_name,
+                        "report_type": "comprehensive_transformation_analysis_with_enhanced_formatting",
+                        "generated_at": timestamp,
+                    },
+                },
             )
-            
+
             # Generate object URL
             s3_object_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{s3_key}"
-            
+
             logger.info(f"✅ Enhanced PDF uploaded to S3: {s3_key}")
             return s3_object_url
-            
+
         except Exception as e:
             logger.error(f"❌ S3 upload failed: {e}")
             return None

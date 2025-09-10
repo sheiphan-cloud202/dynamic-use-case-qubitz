@@ -297,12 +297,16 @@ class AgenticWAFROrchestrator:
             logger.warning(
                 "Research data was None or non-dict, using empty dict as fallback"
             )
-        
+
         print(f"📊 Research complete - data keys: {list(research_data.keys())}")
-        if research_data.get('web_research_data'):
-            web_data = research_data['web_research_data']
-            print(f"🌐 Web research: {web_data.get('successful_scrapes', 0)} successful scrapes")
-        print(f"📄 Research findings length: {len(research_data.get('research_findings', ''))}")
+        if research_data.get("web_research_data"):
+            web_data = research_data["web_research_data"]
+            print(
+                f"🌐 Web research: {web_data.get('successful_scrapes', 0)} successful scrapes"
+            )
+        print(
+            f"📄 Research findings length: {len(research_data.get('research_findings', ''))}"
+        )
 
         # Update status for agent analysis
         status_tracker.update_status(
@@ -327,7 +331,9 @@ class AgenticWAFROrchestrator:
             parsed_files_content,
             custom_context,
         )
-        print(f"✅ Company profile extracted: {company_profile.name} in {company_profile.industry}")
+        print(
+            f"✅ Company profile extracted: {company_profile.name} in {company_profile.industry}"
+        )
         print(f"   📊 Business model: {company_profile.business_model}")
         print(f"   🏢 Company size: {company_profile.company_size}")
         print(f"   ☁️ Cloud maturity: {company_profile.cloud_maturity}")
@@ -1166,6 +1172,3 @@ Ensure profile extraction aligns with these custom requirements and focus areas.
             business_model=profile.business_model,
             additional_context=f"Transformation readiness: {profile.cloud_maturity}, Business stage: {profile.growth_stage}",
         )
-        
-        
-

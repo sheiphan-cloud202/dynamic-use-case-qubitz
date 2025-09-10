@@ -1,6 +1,7 @@
 """
 Status tracking for the Business Transformation Agent.
 """
+
 import logging
 from datetime import datetime
 from decimal import Decimal
@@ -10,6 +11,7 @@ from src.services.aws_clients import status_table
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class StatusCheckpoints:
     INITIATED = "initiated"
@@ -33,14 +35,15 @@ class StatusCheckpoints:
     COMPLETED = "completed"
     ERROR = "error"
 
+
 class StatusTracker:
     """Comprehensive status tracking for all processing stages with DynamoDB Decimal support."""
-    
+
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.status_table = status_table
         self.start_time = datetime.now()
-        
+
     def _convert_floats_to_decimal(self, obj):
         """Convert float values to Decimal for DynamoDB compatibility."""
         if isinstance(obj, dict):
@@ -51,57 +54,70 @@ class StatusTracker:
             return Decimal(str(obj))
         else:
             return obj
-    
-    def update_status(self, checkpoint: str, details: Dict[str, Any] = None, 
-                     current_agent: str = None, urls_scraped: List[str] = None):
+
+    def update_status(
+        self,
+        checkpoint: str,
+        details: Dict[str, Any] = None,
+        current_agent: str = None,
+        urls_scraped: List[str] = None,
+    ):
         """Update processing status with detailed checkpoint information."""
         try:
             now = datetime.now()
             elapsed_seconds = (now - self.start_time).total_seconds()
-            
+
             status_data = {
-                'session_id': self.session_id,
-                'current_status': checkpoint,
-                'last_updated': now.isoformat(),
-                'elapsed_time_seconds': Decimal(str(elapsed_seconds)),
-                'elapsed_time_formatted': self._format_elapsed_time(elapsed_seconds),
-                'details': details or {},
-                'checkpoint_history': self._get_checkpoint_history() + [checkpoint],
-                'timestamp': now.isoformat()
+                "session_id": self.session_id,
+                "current_status": checkpoint,
+                "last_updated": now.isoformat(),
+                "elapsed_time_seconds": Decimal(str(elapsed_seconds)),
+                "elapsed_time_formatted": self._format_elapsed_time(elapsed_seconds),
+                "details": details or {},
+                "checkpoint_history": self._get_checkpoint_history() + [checkpoint],
+                "timestamp": now.isoformat(),
             }
-            
+
             if current_agent:
-                status_data['current_agent'] = current_agent
-                status_data['agent_activity'] = {
-                    'active_agent': current_agent,
-                    'activity_started_at': now.isoformat(),
-                    'task_description': self._get_agent_task_description(checkpoint, current_agent)
+                status_data["current_agent"] = current_agent
+                status_data["agent_activity"] = {
+                    "active_agent": current_agent,
+                    "activity_started_at": now.isoformat(),
+                    "task_description": self._get_agent_task_description(
+                        checkpoint, current_agent
+                    ),
                 }
-            
+
             if urls_scraped:
-                status_data['web_scraping_progress'] = {
-                    'urls_scraped': len(urls_scraped),
-                    'scraped_urls': urls_scraped,
-                    'scraping_method': 'beautiful_soup_google_search',
-                    'scraping_status': 'active' if checkpoint in [StatusCheckpoints.WEB_SCRAPING_IN_PROGRESS, StatusCheckpoints.RESEARCH_IN_PROGRESS] else 'completed'
+                status_data["web_scraping_progress"] = {
+                    "urls_scraped": len(urls_scraped),
+                    "scraped_urls": urls_scraped,
+                    "scraping_method": "beautiful_soup_google_search",
+                    "scraping_status": "active"
+                    if checkpoint
+                    in [
+                        StatusCheckpoints.WEB_SCRAPING_IN_PROGRESS,
+                        StatusCheckpoints.RESEARCH_IN_PROGRESS,
+                    ]
+                    else "completed",
                 }
-            
+
             status_data.update(self._get_checkpoint_specific_data(checkpoint, details))
-            
+
             status_data = self._convert_floats_to_decimal(status_data)
-            
+
             self.status_table.put_item(Item=status_data)
-            
+
             logger.info(f"Status updated to {checkpoint} for session {self.session_id}")
-            
+
         except Exception as e:
             logger.error(f"Error updating status: {e}")
             try:
                 simple_status = {
-                    'session_id': self.session_id,
-                    'current_status': checkpoint,
-                    'last_updated': datetime.now().isoformat(),
-                    'checkpoint_history': [checkpoint]
+                    "session_id": self.session_id,
+                    "current_status": checkpoint,
+                    "last_updated": datetime.now().isoformat(),
+                    "checkpoint_history": [checkpoint],
                 }
                 self.status_table.put_item(Item=simple_status)
                 logger.info(f"Simplified status update successful for {checkpoint}")
@@ -117,9 +133,9 @@ class StatusTracker:
     def _get_checkpoint_history(self) -> List[str]:
         """Get checkpoint history from DynamoDB."""
         try:
-            response = self.status_table.get_item(Key={'session_id': self.session_id})
-            if 'Item' in response:
-                return response['Item'].get('checkpoint_history', [])
+            response = self.status_table.get_item(Key={"session_id": self.session_id})
+            if "Item" in response:
+                return response["Item"].get("checkpoint_history", [])
         except Exception as e:
             logger.warning(f"Could not retrieve checkpoint history: {e}")
         return []
@@ -139,58 +155,72 @@ class StatusTracker:
             StatusCheckpoints.USE_CASES_GENERATED: "Transformation use cases completed",
             StatusCheckpoints.WAFR_PROCESSING: "Processing WAFR assessment",
             StatusCheckpoints.REPORT_GENERATION_STARTED: "Generating comprehensive report with citations",
-            StatusCheckpoints.REPORT_GENERATION_COMPLETED: "Report generation completed"
+            StatusCheckpoints.REPORT_GENERATION_COMPLETED: "Report generation completed",
         }
         return descriptions.get(checkpoint, f"Processing {checkpoint}")
 
-    def _get_checkpoint_specific_data(self, checkpoint: str, details: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_checkpoint_specific_data(
+        self, checkpoint: str, details: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Get checkpoint-specific data for status tracking."""
         specific_data = {}
-        
+
         if checkpoint == StatusCheckpoints.CUSTOM_PROMPT_PROCESSING:
-            specific_data['custom_prompt_processing'] = {
-                'processing_stage': 'analyzing_custom_requirements',
-                'focus_extraction': True,
-                'context_integration': True
+            specific_data["custom_prompt_processing"] = {
+                "processing_stage": "analyzing_custom_requirements",
+                "focus_extraction": True,
+                "context_integration": True,
             }
         elif checkpoint == StatusCheckpoints.WEB_SCRAPING_COMPLETED:
-            specific_data['web_scraping_capabilities'] = {
-                'google_search_enabled': True,
-                'beautiful_soup_parsing': True,
-                'concurrent_scraping': True,
-                'citation_ready': True
+            specific_data["web_scraping_capabilities"] = {
+                "google_search_enabled": True,
+                "beautiful_soup_parsing": True,
+                "concurrent_scraping": True,
+                "citation_ready": True,
             }
         elif checkpoint == StatusCheckpoints.USE_CASES_GENERATED:
-            specific_data['transformation_capabilities'] = {
-                'business_focused': True,
-                'company_aligned': True,
-                'strategic_value': True,
-                'web_enhanced': details.get('web_enhanced', False) if details else False,
-                'custom_context_aligned': details.get('custom_context_aligned', False) if details else False
+            specific_data["transformation_capabilities"] = {
+                "business_focused": True,
+                "company_aligned": True,
+                "strategic_value": True,
+                "web_enhanced": details.get("web_enhanced", False)
+                if details
+                else False,
+                "custom_context_aligned": details.get("custom_context_aligned", False)
+                if details
+                else False,
             }
         elif checkpoint == StatusCheckpoints.REPORT_GENERATION_COMPLETED:
-            specific_data['report_details'] = {
-                'report_type': 'consolidated_comprehensive_analysis',
-                'quality_level': 'professional_consulting_grade',
-                'format': 'pdf_with_clickable_citations',
-                'citation_source': 'web_scraping_with_beautiful_soup',
-                'custom_context_integrated': details.get('content_enhanced_with_files', False) if details else False
+            specific_data["report_details"] = {
+                "report_type": "consolidated_comprehensive_analysis",
+                "quality_level": "professional_consulting_grade",
+                "format": "pdf_with_clickable_citations",
+                "citation_source": "web_scraping_with_beautiful_soup",
+                "custom_context_integrated": details.get(
+                    "content_enhanced_with_files", False
+                )
+                if details
+                else False,
             }
-        
+
         return specific_data
 
     def get_current_status(self) -> Dict[str, Any]:
         """Get current status from DynamoDB."""
         try:
-            response = self.status_table.get_item(Key={'session_id': self.session_id})
-            if 'Item' in response:
-                item = response['Item']
+            response = self.status_table.get_item(Key={"session_id": self.session_id})
+            if "Item" in response:
+                item = response["Item"]
                 # Convert Decimal back to float for JSON serialization
                 return self._convert_decimals_to_float(dict(item))
-            return {'current_status': 'unknown', 'session_id': self.session_id}
+            return {"current_status": "unknown", "session_id": self.session_id}
         except Exception as e:
             logger.error(f"Error retrieving status: {e}")
-            return {'current_status': 'error', 'session_id': self.session_id, 'error': str(e)}
+            return {
+                "current_status": "error",
+                "session_id": self.session_id,
+                "error": str(e),
+            }
 
     def _convert_decimals_to_float(self, obj):
         """Convert Decimal values back to float for JSON serialization."""

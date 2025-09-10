@@ -1,12 +1,15 @@
 """
 Dataclasses for the Business Transformation Agent.
 """
+
 from dataclasses import dataclass, field
 from typing import List
+
 
 @dataclass
 class CompanyProfile:
     """Company profile data structure."""
+
     name: str
     industry: str
     business_model: str
@@ -17,9 +20,11 @@ class CompanyProfile:
     growth_stage: str
     compliance_requirements: List[str]
 
+
 @dataclass
 class UseCaseStructured:
     """Structured business transformation use case data."""
+
     title: str
     category: str
     current_state: str
@@ -35,9 +40,11 @@ class UseCaseStructured:
     success_metrics: List[str]
     dynamic_id: str = ""
 
+
 @dataclass
 class UseCase:
     """Legacy use case format for compatibility."""
+
     id: str
     title: str
     description: str
@@ -54,9 +61,11 @@ class UseCase:
     proposed_solution: str = ""
     url: str = ""
 
+
 @dataclass
 class CompanyInfo:
     """Legacy company info format."""
+
     name: str
     url: str
     industry: str

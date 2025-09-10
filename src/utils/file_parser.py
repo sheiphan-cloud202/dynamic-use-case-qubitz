@@ -32,15 +32,15 @@ class FileParser:
         try:
             bucket = key = None
 
-            if s3_url.startswith('s3://'):
-                parts = s3_url.replace('s3://', '').split('/', 1)
+            if s3_url.startswith("s3://"):
+                parts = s3_url.replace("s3://", "").split("/", 1)
                 if len(parts) != 2:
                     logger.error(f"Cannot parse S3 URL: {s3_url}")
                     return None
                 bucket, key = parts
 
-            elif s3_url.startswith('https://') and '.s3.amazonaws.com' in s3_url:
-                parts = s3_url.replace('https://', '').split('.s3.amazonaws.com/')
+            elif s3_url.startswith("https://") and ".s3.amazonaws.com" in s3_url:
+                parts = s3_url.replace("https://", "").split(".s3.amazonaws.com/")
                 if len(parts) != 2:
                     logger.error(f"Cannot parse S3 URL: {s3_url}")
                     return None
@@ -68,17 +68,19 @@ class FileParser:
 
         content = ""
 
-
         try:
             import PyPDF2
+
             logger.warning("✅ PyPDF2 available")
-            with open(file_path, 'rb') as file:
+            with open(file_path, "rb") as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 for page in pdf_reader.pages:
                     content += page.extract_text() + "\n"
 
             if content.strip():
-                logger.warning(f"Successfully parsed PDF with PyPDF2: {len(content)} chars")
+                logger.warning(
+                    f"Successfully parsed PDF with PyPDF2: {len(content)} chars"
+                )
                 return content.strip()
 
         except Exception as e:
@@ -86,6 +88,7 @@ class FileParser:
 
         try:
             import pdfplumber
+
             logger.warning("✅ pdfplumber available")
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages:
@@ -94,12 +97,14 @@ class FileParser:
                         content += text + "\n"
 
             if content.strip():
-                logger.warning(f"Successfully parsed PDF with pdfplumber: {len(content)} chars")
+                logger.warning(
+                    f"Successfully parsed PDF with pdfplumber: {len(content)} chars"
+                )
                 return content.strip()
 
         except Exception as e:
             logger.warning(f"pdfplumber failed: {e}, trying PyPDF2")
-    
+
         logger.error(f"Failed to parse PDF: {file_path}")
         return None
 
@@ -110,6 +115,7 @@ class FileParser:
 
         try:
             import docx
+
             logger.warning("✅ docx available")
             doc = docx.Document(file_path)
             content = []
@@ -148,9 +154,9 @@ class FileParser:
         try:
             file_extension = os.path.splitext(temp_file_path)[1].lower()
 
-            if file_extension == '.pdf':
+            if file_extension == ".pdf":
                 return FileParser.parse_pdf(temp_file_path)
-            elif file_extension in ['.docx', '.doc']:
+            elif file_extension in [".docx", ".doc"]:
                 return FileParser.parse_docx(temp_file_path)
             else:
                 logger.error(f"Unsupported file type: {file_extension}")
