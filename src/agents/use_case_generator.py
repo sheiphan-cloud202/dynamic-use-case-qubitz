@@ -54,6 +54,10 @@ class DynamicUseCaseGenerator:
                 - Competitive advantage creation through strategic initiatives
                 - Implementation feasibility assessment and risk management
 
+                You have access to:
+                - http_request tool to fetch additional company and industry information
+                - retrieve tool for research and competitive intelligence
+
                 When provided with custom context, requirements, or specific focus areas, prioritize use cases that directly address those needs and align with the specified priorities.
 
                 When provided with web-scraped content and company document content, use this as primary intelligence to understand their current operations, processes, and strategic context.
@@ -197,14 +201,32 @@ class DynamicUseCaseGenerator:
         try:
             logger.info(f"Generating transformation use cases for {company_profile.name}")
             
+            print(f"🎯 Use Case Generation Debug for {company_profile.name}:")
+            print(f"  📊 Research data available: {bool(research_data)}")
+            if research_data.get('web_research_data'):
+                web_data = research_data['web_research_data']
+                print(f"    🌐 Web research content: {len(web_data.get('research_content', ''))} chars")
+                print(f"    ✅ Successful web scrapes: {web_data.get('successful_scrapes', 0)}")
+            print(f"  📁 File content available: {bool(parsed_files_content)}")
+            if parsed_files_content:
+                print(f"    📄 File content length: {len(parsed_files_content)} chars")
+            print(f"  🎯 Custom context available: {bool(custom_context and custom_context.get('processed_prompt'))}")
+            print(f"  📝 Generation prompt length: {len(generation_prompt)} characters")
+            
             # Generate business-focused use cases
+            print(f"🔬 Calling generator agent for use case creation...")
+            print(f"🌐 Generator agent also has access to http_request tools for additional research")
             response = self.generator(generation_prompt)
             response_text = str(response)
             
             logger.info(f"Raw response length: {len(response_text)} characters")
+            print(f"✅ Use case generation complete - response length: {len(response_text)} characters")
+            print(f"🔍 Generator agent may have fetched additional web content for use case creation")
             
             # Parse the XML-formatted use cases
+            print(f"🔍 Parsing XML-formatted use cases...")
             use_cases = self._parse_xml_formatted_use_cases(response_text, company_profile)
+            print(f"✅ Parsed {len(use_cases)} use cases successfully")
             
             if not use_cases:
                 logger.warning("No use cases parsed from XML, generating fallback")

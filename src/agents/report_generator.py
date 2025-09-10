@@ -219,7 +219,7 @@ class ConsolidatedReportGenerator:
                 - DO NOT repeat content or restate the same paragraph in multiple sections.
                 - DO NOT cut off mid-sentence; complete every paragraph.
                 - Each section MUST be unique, non-overlapping, and provide incremental insights.
-                - Keep language concise; no filler phrases; avoid repeating “Immediate Next Steps” blocks.
+                - Keep language concise; no filler phrases; avoid repeating "Immediate Next Steps" blocks.
                 - If you need to reference similar ideas, summarize once and cross-reference instead of duplicating.
                 MANDATORY XML TAG FORMAT - Use ALL of these tags appropriately:
                 
@@ -239,7 +239,7 @@ class ConsolidatedReportGenerator:
                 FINANCIAL EXPRESSION POLICY (MANDATORY):
                - Do NOT include any absolute currency figures (no $, USD, INR, EUR, etc.).
                - Express Total Cost of Ownership (TCO), ROI, and investment in qualitative terms or percentages only.
-               - Use ranges and relative values (e.g., “15–20% efficiency improvement”, “payback in 6–12 months”) instead of dollar amounts.
+               - Use ranges and relative values (e.g., "15–20% efficiency improvement", "payback in 6–12 months") instead of dollar amounts.
                - Avoid making any commercial commitment or guarantee of savings/investment.
 
 
@@ -331,7 +331,7 @@ class ConsolidatedReportGenerator:
         """Generate XML-tagged report with enhanced formatting and comprehensive use case analysis."""
         
         # Get web research data for citations
-        web_research_data = research_data.get('web_research_data', {})
+        web_research_data = research_data.get('web_research_data') or {}
         scraped_results = web_research_data.get('scraped_results', [])
         
         # Process and prepare real citations from web scraping
@@ -957,8 +957,9 @@ Generate a comprehensive, detailed report that demonstrates deep industry knowle
         """Create fallback XML report with enhanced formatting and comprehensive use case analysis."""
         
         enhancement_notes = []
-        if research_data.get('web_research_data', {}).get('successful_scrapes', 0) > 0:
-            enhancement_notes.append(f"Enhanced with Web Intelligence from {research_data['web_research_data']['successful_scrapes']} sources")
+        web_research_data_fallback = research_data.get('web_research_data') or {}
+        if web_research_data_fallback.get('successful_scrapes', 0) > 0:
+            enhancement_notes.append(f"Enhanced with Web Intelligence from {web_research_data_fallback.get('successful_scrapes', 0)} sources")
         if parsed_files_content:
             enhancement_notes.append("Enhanced with Document Analysis")
         if custom_context and custom_context.get('processed_prompt'):

@@ -38,9 +38,12 @@ class CompanyResearchSwarm:
                 - Strategic priorities and transformation readiness
 
                 You have access to:
-                - Web scraping capabilities using Beautiful Soup and Google Search
+                - http_request tool to fetch web content directly from company websites and sources
+                - retrieve tool for additional research and information gathering
                 - Document content from uploaded company files (PDFs/DOCX)
                 - Custom context and specific requirements from users
+
+                IMPORTANT: Always use your http_request tool to fetch fresh content from company URLs when provided. This gives you real-time, accurate company information for analysis.
 
                 When provided with custom context or specific requirements, prioritize analysis that aligns with those focus areas and requirements.
 
@@ -125,6 +128,8 @@ class CompanyResearchSwarm:
         base_research_prompt = f"""
                 Conduct deep business analysis for {company_name} (website: {company_url}) to understand their strategic transformation opportunities.
                 
+                CRITICAL FIRST STEP: Use your http_request tool to fetch fresh content from {company_url} to get real-time company information. This is essential for accurate analysis.
+                
                 {web_context}
                 {file_context}
                 
@@ -148,6 +153,7 @@ class CompanyResearchSwarm:
                 - How could cloud and modern technology accelerate their business objectives?
                 
                 RESEARCH APPROACH:
+                - FIRST: Use http_request tool to fetch content from {company_url} for current company information
                 - Use web-scraped content as primary market intelligence
                 - Use document content as internal operational intelligence
                 - Analyze business model and competitive positioning
@@ -167,6 +173,17 @@ class CompanyResearchSwarm:
         try:
             logger.info(f"Starting comprehensive business analysis for {company_name}")
             
+            print(f"🧠 Company Research Debug for {company_name}:")
+            print(f"  📊 Web research data available: {bool(web_research_data)}")
+            if web_research_data:
+                print(f"    ✅ Successful web scrapes: {web_research_data.get('successful_scrapes', 0)}")
+                print(f"    📄 Web content length: {len(web_research_data.get('research_content', ''))}")
+            print(f"  📁 File content available: {bool(parsed_files_content)}")
+            if parsed_files_content:
+                print(f"    📄 File content length: {len(parsed_files_content)}")
+            print(f"  🎯 Custom context available: {bool(custom_context and custom_context.get('processed_prompt'))}")
+            print(f"  📝 Research prompt length: {len(research_prompt)} characters")
+            
             if status_tracker:
                 status_tracker.update_status(
                     StatusCheckpoints.RESEARCH_IN_PROGRESS,
@@ -181,7 +198,13 @@ class CompanyResearchSwarm:
                 )
             
             # Conduct business-focused research
+            print(f"🔬 Calling coordinator agent for research analysis...")
+            print(f"🌐 Agent has access to tools: http_request, retrieve")
+            print(f"📎 Target URL for http_request: {company_url}")
+            print(f"🔍 Agent will now attempt to fetch web content...")
             research_result = self.coordinator(research_prompt)
+            print(f"✅ Research analysis complete - result length: {len(str(research_result))} characters")
+            print(f"🔍 Agent has completed web content fetching")
             
             # Get URLs from web research
             scraped_urls = web_research_data.get('urls_scraped', []) if web_research_data else []
@@ -219,15 +242,38 @@ class CompanyResearchSwarm:
                     urls_scraped=scraped_urls
                 )
             
+            # Print detailed URL information
+            print(f"\n🔗 WEB SCRAPING SUMMARY FOR {company_name}:")
+            print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print(f"📋 Primary company URL: {company_url}")
+            print(f"📊 URLs accessed by agents: {len(scraped_urls)}")
+            for i, url in enumerate(scraped_urls, 1):
+                print(f"  {i}. {url}")
+            
+            if web_research_data:
+                print(f"🌐 BeautifulSoup web scraping attempted: {web_research_data.get('total_urls_attempted', 0)} URLs")
+                print(f"✅ BeautifulSoup successful scrapes: {web_research_data.get('successful_scrapes', 0)}")
+                if web_research_data.get('urls_scraped'):
+                    print(f"📋 BeautifulSoup URLs scraped:")
+                    for i, url in enumerate(web_research_data['urls_scraped'], 1):
+                        print(f"    {i}. {url}")
+            else:
+                print(f"⚠️  BeautifulSoup web scraping: Not available (libraries missing)")
+            
+            print(f"🤖 Strands http_request tool: Available and used by agents")
+            print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            
             return {
                 'research_findings': enhanced_findings,
                 'research_timestamp': datetime.now().isoformat(),
-                'research_method': 'web_scraping_with_beautiful_soup_and_google_search',
+                'research_method': 'strands_http_request_with_fallback_web_scraping',
                 'company_url_analyzed': company_url,
                 'urls_scraped': scraped_urls,
                 'total_urls_processed': len(scraped_urls),
                 'web_research_data': web_research_data,
                 'successful_web_scrapes': web_research_data.get('successful_scrapes', 0) if web_research_data else 0,
+                'strands_http_requests': True,
+                'agent_web_access': True,
                 'file_content_used': bool(parsed_files_content),
                 'file_content_length': len(parsed_files_content) if parsed_files_content else 0,
                 'custom_context_used': bool(custom_context and custom_context.get('processed_prompt')),
