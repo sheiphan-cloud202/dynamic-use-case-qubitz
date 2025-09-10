@@ -5,7 +5,7 @@ Use case generation agent for the Business Transformation Agent.
 import logging
 import re
 from typing import List, Dict, Any, Optional
-from strands import Agent, tool
+from strands import Agent
 from strands_tools import retrieve, http_request
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from src.core.bedrock_manager import EnhancedModelManager

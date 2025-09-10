@@ -22,6 +22,7 @@ from src.utils.file_parser import FileParser
 from src.utils.prompt_processor import CustomPromptProcessor
 from src.utils.session_manager import SessionManager
 from src.utils.status_tracker import StatusTracker, StatusCheckpoints
+from src.services.ppt_generator import generate_ppt_from_s3_report
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -80,6 +81,7 @@ class AgenticWAFROrchestrator:
             custom_prompt = payload.get(
                 "prompt", ""
             )  # Custom prompt for additional context
+            ppt_template = payload.get("ppt_template", "use_case")
 
             if not company_name:
                 return {"status": "error", "message": "company_name is required"}
@@ -199,6 +201,7 @@ class AgenticWAFROrchestrator:
                         project_id,
                         user_id,
                         custom_context,
+                        ppt_template,
                     )
                 elif action == "select_use_cases":
                     result = self._handle_select_use_cases(
@@ -269,6 +272,7 @@ class AgenticWAFROrchestrator:
         project_id: str,
         user_id: str,
         custom_context: Dict[str, str] = None,
+        ppt_template: str = "use_case",
     ) -> Dict[str, Any]:
         """Handle start action with web scraping, custom prompt, file parsing, personalized use case generation, and comprehensive reporting."""
         logger.info(
@@ -364,6 +368,29 @@ class AgenticWAFROrchestrator:
         )
         print(f"✅ Report generated: {report_url if report_url else 'No URL returned'}")
 
+        # Generate PPT from the report if available
+        ppt_url = None
+        if report_url:
+            try:
+                status_tracker.update_status(
+                    StatusCheckpoints.PPT_GENERATION_STARTED,
+                    {"report_url": report_url, "ppt_template": ppt_template},
+                )
+                ppt_url = generate_ppt_from_s3_report(
+                    report_url, company_name, template_type=ppt_template
+                )
+                status_tracker.update_status(
+                    StatusCheckpoints.PPT_GENERATION_COMPLETED,
+                    {
+                        "ppt_generated": bool(ppt_url),
+                        "ppt_url": ppt_url,
+                        "ppt_template": ppt_template,
+                    },
+                )
+                print(f"🎞 PPT generated: {ppt_url if ppt_url else 'No PPT URL returned'}")
+            except Exception as e:
+                logger.warning(f"PPT generation failed: {e}")
+
         # Convert to legacy format
         legacy_use_cases = []
         available_use_case_ids = []
@@ -411,6 +438,8 @@ class AgenticWAFROrchestrator:
             "legacy_use_cases": legacy_use_cases,
             "dynamic_use_case_ids": available_use_case_ids,
             "report_url": report_url,
+            "ppt_url": ppt_url,
+            "ppt_template": ppt_template,
             "project_id": project_id,
             "user_id": user_id,
             "files_processed": len(files) if files else 0,
@@ -473,6 +502,8 @@ class AgenticWAFROrchestrator:
             "available_use_case_ids": available_use_case_ids,
             "total_use_cases": len(structured_use_cases),
             "report_url": report_url,
+            "ppt_url": ppt_url,
+            "ppt_template": ppt_template,
             "custom_context_summary": {
                 "context_type": custom_context.get("context_type")
                 if custom_context
@@ -610,6 +641,8 @@ class AgenticWAFROrchestrator:
             "selected_use_case_ids": valid_selected_ids,
             "selected_use_cases": [asdict(uc) for uc in selected_use_cases],
             "report_url": report_url,
+            "ppt_url": session_data.get("ppt_url", ""),
+            "ppt_template": session_data.get("ppt_template"),
             "business_transformation_summary": {
                 "method": "transformation_assessment_with_consolidated_report_and_web_scraping",
                 "company_aligned_use_cases": True,
@@ -617,6 +650,7 @@ class AgenticWAFROrchestrator:
                 "file_enhanced_analysis": files_processed > 0,
                 "custom_context_alignment": bool(custom_context),
                 "consolidated_report_generated": bool(report_url),
+                "ppt_generated": bool(session_data.get("ppt_url")),
                 "comprehensive_use_case_analysis": True,
                 "enhanced_formatting": True,
             },
@@ -856,6 +890,8 @@ class AgenticWAFROrchestrator:
                     report_info = {
                         "session_id": session_id,
                         "report_url": session_data.get("report_url", ""),
+                        "ppt_url": session_data.get("ppt_url", ""),
+                        "ppt_template": session_data.get("ppt_template"),
                         "company_name": company_name,
                         "company_url": company_url,
                         "use_case_count": len(

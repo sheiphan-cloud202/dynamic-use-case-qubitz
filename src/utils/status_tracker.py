@@ -32,6 +32,8 @@ class StatusCheckpoints:
     WAFR_COMPLETED = "wafr_completed"
     REPORT_GENERATION_STARTED = "report_generation_started"
     REPORT_GENERATION_COMPLETED = "report_generation_completed"
+    PPT_GENERATION_STARTED = "ppt_generation_started"
+    PPT_GENERATION_COMPLETED = "ppt_generation_completed"
     COMPLETED = "completed"
     ERROR = "error"
 
@@ -156,6 +158,8 @@ class StatusTracker:
             StatusCheckpoints.WAFR_PROCESSING: "Processing WAFR assessment",
             StatusCheckpoints.REPORT_GENERATION_STARTED: "Generating comprehensive report with citations",
             StatusCheckpoints.REPORT_GENERATION_COMPLETED: "Report generation completed",
+            StatusCheckpoints.PPT_GENERATION_STARTED: "Generating PowerPoint from report",
+            StatusCheckpoints.PPT_GENERATION_COMPLETED: "PowerPoint generation completed",
         }
         return descriptions.get(checkpoint, f"Processing {checkpoint}")
 
@@ -201,6 +205,12 @@ class StatusTracker:
                 )
                 if details
                 else False,
+            }
+        elif checkpoint == StatusCheckpoints.PPT_GENERATION_COMPLETED:
+            specific_data["ppt_details"] = {
+                "generated": details.get("ppt_generated", False) if details else False,
+                "template": details.get("ppt_template") if details else None,
+                "ppt_url": details.get("ppt_url") if details else None,
             }
 
         return specific_data

@@ -6,7 +6,7 @@ import logging
 import time
 from datetime import datetime
 from typing import Dict, Any
-from strands import Agent, tool
+from strands import Agent
 from strands_tools import retrieve, http_request
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from src.core.bedrock_manager import EnhancedModelManager

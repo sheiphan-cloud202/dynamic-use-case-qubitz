@@ -5,10 +5,9 @@ Report generation agent for the Business Transformation Agent.
 import logging
 import os
 import re
-import shutil
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from strands import Agent, tool
+from strands import Agent
 from strands_tools import retrieve, http_request
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from src.core.bedrock_manager import EnhancedModelManager
@@ -21,30 +20,21 @@ from src.utils.status_tracker import StatusTracker, StatusCheckpoints
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Try to import PDF generation libraries
 try:
-    import weasyprint
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib.colors import black, blue, HexColor
+    from reportlab.platypus.flowables import HRFlowable
 
+    REPORTLAB_AVAILABLE = True
     PDF_GENERATION_AVAILABLE = True
-    logger.info("✅ WeasyPrint PDF generation available")
-except (ImportError, OSError) as e:
-    logger.warning(f"⚠️ WeasyPrint not available: {e}")
-    logger.info("🔄 Falling back to ReportLab for PDF generation")
-    try:
-        from reportlab.lib.pagesizes import letter, A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import inch
-        from reportlab.lib.colors import black, blue, HexColor
-        from reportlab.platypus.flowables import HRFlowable
-
-        REPORTLAB_AVAILABLE = True
-        PDF_GENERATION_AVAILABLE = True
-        logger.info("✅ ReportLab available for PDF generation")
-    except ImportError:
-        REPORTLAB_AVAILABLE = False
-        PDF_GENERATION_AVAILABLE = False
-        logger.warning("⚠️ No PDF generation libraries available")
+    logger.info("✅ ReportLab available for PDF generation")
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+    PDF_GENERATION_AVAILABLE = False
+    logger.warning("⚠️ No PDF generation libraries available")
 
 
 class ReportXMLParser:
