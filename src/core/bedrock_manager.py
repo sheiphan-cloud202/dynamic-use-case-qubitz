@@ -22,21 +22,21 @@ class EnhancedModelManager:
             BedrockModel(
                 model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
                 temperature=0.1,
-                max_tokens=35000,
+                max_tokens=40000,
                 boto_session=session,
                 boto_client_config=self.boto_config
             ),
             BedrockModel(
                 model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
                 temperature=0.2,
-                max_tokens=35000,
+                max_tokens=40000,
                 boto_session=session,
                 boto_client_config=self.boto_config
             ),
             BedrockModel(
                 model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
                 temperature=0.15,
-                max_tokens=35000,
+                max_tokens=40000,
                 boto_session=session,
                 boto_client_config=self.boto_config
             )
@@ -46,7 +46,7 @@ class EnhancedModelManager:
         self.research_model = BedrockModel(
             model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
             temperature=0.2,
-            max_tokens=5000,
+            max_tokens=40000,
             boto_session=session,
             boto_client_config=self.boto_config
         )
@@ -54,7 +54,7 @@ class EnhancedModelManager:
         self.creative_model = BedrockModel(
             model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
             temperature=0.5,
-            max_tokens=4000,
+            max_tokens=40000,
             boto_session=session,
             boto_client_config=self.boto_config
         )
@@ -81,7 +81,7 @@ class EnhancedModelManager:
         self.emergency_model = BedrockModel(
             model_id="us.amazon.nova-lite-v1:0",
             temperature=0.0,
-            max_tokens=1000,
+            max_tokens=35000,
             boto_session=session,
             boto_client_config=self.boto_config
         )

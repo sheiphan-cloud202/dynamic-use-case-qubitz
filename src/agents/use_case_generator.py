@@ -54,6 +54,10 @@ class DynamicUseCaseGenerator:
                 - Competitive advantage creation through strategic initiatives
                 - Implementation feasibility assessment and risk management
 
+                You have access to:
+                - http_request tool to fetch additional company and industry information
+                - retrieve tool for research and competitive intelligence
+
                 When provided with custom context, requirements, or specific focus areas, prioritize use cases that directly address those needs and align with the specified priorities.
 
                 When provided with web-scraped content and company document content, use this as primary intelligence to understand their current operations, processes, and strategic context.
@@ -197,14 +201,32 @@ class DynamicUseCaseGenerator:
         try:
             logger.info(f"Generating transformation use cases for {company_profile.name}")
             
+            print(f"🎯 Use Case Generation Debug for {company_profile.name}:")
+            print(f"  📊 Research data available: {bool(research_data)}")
+            if research_data.get('web_research_data'):
+                web_data = research_data['web_research_data']
+                print(f"    🌐 Web research content: {len(web_data.get('research_content', ''))} chars")
+                print(f"    ✅ Successful web scrapes: {web_data.get('successful_scrapes', 0)}")
+            print(f"  📁 File content available: {bool(parsed_files_content)}")
+            if parsed_files_content:
+                print(f"    📄 File content length: {len(parsed_files_content)} chars")
+            print(f"  🎯 Custom context available: {bool(custom_context and custom_context.get('processed_prompt'))}")
+            print(f"  📝 Generation prompt length: {len(generation_prompt)} characters")
+            
             # Generate business-focused use cases
+            print(f"🔬 Calling generator agent for use case creation...")
+            print(f"🌐 Generator agent also has access to http_request tools for additional research")
             response = self.generator(generation_prompt)
             response_text = str(response)
             
             logger.info(f"Raw response length: {len(response_text)} characters")
+            print(f"✅ Use case generation complete - response length: {len(response_text)} characters")
+            print(f"🔍 Generator agent may have fetched additional web content for use case creation")
             
             # Parse the XML-formatted use cases
+            print(f"🔍 Parsing XML-formatted use cases...")
             use_cases = self._parse_xml_formatted_use_cases(response_text, company_profile)
+            print(f"✅ Parsed {len(use_cases)} use cases successfully")
             
             if not use_cases:
                 logger.warning("No use cases parsed from XML, generating fallback")
@@ -375,48 +397,48 @@ class DynamicUseCaseGenerator:
         business_supplements = [
             {
                 'name': 'Advanced Business Intelligence and Analytics Platform',
-                'description': 'Implement a comprehensive business intelligence platform that consolidates data from multiple sources to provide real-time insights and predictive analytics. This initiative will enable data-driven decision making across all departments, improve operational efficiency, and identify new revenue opportunities through advanced analytics capabilities.',
+                'description': 'Implement a comprehensive business intelligence platform that consolidates data from multiple sources to provide real-time insights and predictive analytics. This initiative will enable data-driven decision making across all departments, improve operational efficiency, and identify new revenue opportunities through advanced analytics capabilities. The solution addresses current data fragmentation, limited reporting capabilities, and lack of predictive insights by implementing a unified analytics platform with machine learning capabilities.',
                 'category': 'Data Analytics',
-                'current_state': 'Limited data insights and analytics capabilities',
+                'current_state': 'Limited data insights and analytics capabilities with fragmented data sources and manual reporting processes',
                 'aws_services': ['Redshift', 'QuickSight', 'Glue', 'SageMaker'],
-                'business_value': 'Data-driven decision making and strategic insights',
+                'business_value': 'Data-driven decision making and strategic insights with 40-60% improvement in decision speed and accuracy',
                 'implementation_phases': ['Data Strategy', 'Platform Setup', 'Analytics Development', 'Training'],
                 'timeline_months': 8,
                 'monthly_cost_usd': 4000,
                 'complexity': 'High',
                 'priority': 'High',
                 'risk_level': 'Medium',
-                'success_metrics': ['Data Utilization', 'Decision Speed', 'Insight Generation']
+                'success_metrics': ['Data Utilization', 'Decision Speed', 'Insight Generation', 'Report Accuracy', 'User Adoption']
             },
             {
                 'name': 'Customer Experience Optimization and Personalization',
-                'description': 'Develop a unified customer experience platform that integrates all customer touchpoints and provides personalized interactions based on customer behavior and preferences. This solution will improve customer satisfaction, increase retention rates, and drive revenue growth through enhanced customer engagement.',
+                'description': 'Develop a unified customer experience platform that integrates all customer touchpoints and provides personalized interactions based on customer behavior and preferences. This solution will improve customer satisfaction, increase retention rates, and drive revenue growth through enhanced customer engagement. The initiative addresses fragmented customer touchpoints, limited personalization, and inconsistent service delivery across channels',
                 'category': 'Customer Experience',
-                'current_state': 'Fragmented customer touchpoints and limited personalization',
+                'current_state': 'Fragmented customer touchpoints and limited personalization with inconsistent service delivery across channels',
                 'aws_services': ['Personalize', 'Pinpoint', 'Connect', 'Comprehend'],
-                'business_value': 'Improved customer satisfaction and retention',
+                'business_value': 'Improved customer satisfaction and retention with 30-50% improvement in customer engagement metrics',
                 'implementation_phases': ['Journey Mapping', 'Platform Setup', 'Personalization', 'Optimization'],
                 'timeline_months': 6,
                 'monthly_cost_usd': 3500,
                 'complexity': 'Medium',
                 'priority': 'High',
                 'risk_level': 'Low',
-                'success_metrics': ['Customer Satisfaction', 'Retention Rate', 'Engagement Score']
+                'success_metrics': ['Customer Satisfaction', 'Retention Rate', 'Engagement Score', 'Response Time', 'Personalization Accuracy']
             },
             {
                 'name': 'Intelligent Process Automation and Workflow Optimization',
-                'description': 'Implement intelligent automation across key business processes to reduce manual effort, minimize errors, and improve operational efficiency. This initiative will streamline workflows, reduce operational costs, and enable employees to focus on higher-value activities that drive business growth.',
+                'description': 'Implement intelligent automation across key business processes to reduce manual effort, minimize errors, and improve operational efficiency. This initiative will streamline workflows, reduce operational costs, and enable employees to focus on higher-value activities that drive business growth. The solution addresses manual processes, workflow inefficiencies, and error-prone operations through intelligent automation and workflow optimization.',
                 'category': 'Process Automation',
-                'current_state': 'Manual processes causing inefficiencies and errors',
+                'current_state': 'Manual processes causing inefficiencies and errors with limited automation and workflow optimization',
                 'aws_services': ['Step Functions', 'Lambda', 'API Gateway', 'SQS'],
-                'business_value': 'Reduced operational costs and improved accuracy',
+                'business_value': 'Reduced operational costs and improved accuracy with 35-55% efficiency improvements and error reduction',
                 'implementation_phases': ['Process Analysis', 'Automation Design', 'Implementation', 'Monitoring'],
                 'timeline_months': 5,
                 'monthly_cost_usd': 2500,
                 'complexity': 'Medium',
                 'priority': 'Critical',
                 'risk_level': 'Medium',
-                'success_metrics': ['Process Efficiency', 'Error Reduction', 'Cost Savings']
+                'success_metrics': ['Process Efficiency', 'Error Reduction', 'Cost Savings', 'Processing Time', 'User Productivity']
             }
         ]
         

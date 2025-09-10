@@ -200,6 +200,11 @@ class WebScraper:
                              custom_context: Dict[str, str] = None) -> Dict[str, Any]:
         """Perform comprehensive research using Google search and web scraping."""
         
+        print(f"🔍 Starting comprehensive research for {company_name}")
+        print(f"🌐 Web scraping available: {WEB_SCRAPING_AVAILABLE}")
+        print(f"📎 Company URL: {company_url}")
+        print(f"📝 Custom context provided: {bool(custom_context)}")
+        
         # Build search queries
         search_queries = [
             f"{company_name} company business model",
@@ -208,6 +213,7 @@ class WebScraper:
             f"{company_name} technology stack",
             f"{company_name} recent news"
         ]
+        print(f"🔎 Built {len(search_queries)} search queries")
         
         # Add custom context queries
         if custom_context and custom_context.get('focus_areas'):
@@ -247,6 +253,12 @@ class WebScraper:
                 successful_urls.append(result['url'])
         
         research_content = "\n".join(combined_content)
+        
+        print(f"📊 Research complete for {company_name}:")
+        print(f"  ✅ Successful scrapes: {len(successful_urls)}")
+        print(f"  📄 Total content length: {len(research_content)} characters")
+        print(f"  🔗 URLs attempted: {len(urls_to_scrape)}")
+        print(f"  🎯 Search queries used: {len(search_queries)}")
         
         return {
             'research_content': research_content,
