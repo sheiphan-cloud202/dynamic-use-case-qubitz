@@ -4,7 +4,7 @@ Bare minimum Lambda handler.
 
 # 🔧 Set EFS package path FIRST, before any imports
 import sys
-sys.path.insert(0, "/mnt/efs/envs/strands_lambda/lambda-env")
+sys.path.insert(0, "/mnt/efs/dynamic_usecase/myenv/lib/python3.11/site-packages")
 
 # ✅ Now safely import everything else
 import json

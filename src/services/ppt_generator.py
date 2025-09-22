@@ -10,10 +10,32 @@ import os
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from abc import ABC, abstractmethod
 
 import boto3
+
+# ====
+
+import logging, importlib, platform, sys
+logger = logging.getLogger(__name__)
+
+try:
+    import pptx
+    import PIL
+    import lxml.etree as _et
+    logger.info("pptx OK from: %s", getattr(pptx, "__file__", "?"))
+    logger.info("Pillow OK from: %s", getattr(PIL, "__file__", "?"))
+    logger.info("lxml OK, libxml version: %s, from: %s",
+                getattr(_et, "LIBXML_VERSION", "?"),
+                getattr(_et, "__file__", "?"))
+    PPT_AVAILABLE = True
+except Exception as e:
+    PPT_AVAILABLE = False
+    logger.exception("❌ python-pptx import failed (arch=%s, py=%s): %s",
+                     platform.machine(), sys.version.split()[0], e)
+
+# ====
 
 try:
     from pptx import Presentation
@@ -23,14 +45,30 @@ try:
     PPT_AVAILABLE = True
 except ImportError:
     PPT_AVAILABLE = False
+    # Define fallback types for when pptx is not available
+    if not TYPE_CHECKING:
+        RGBColor = Any
+        Presentation = Any
+        Pt = Any
+
+if TYPE_CHECKING:
+    from pptx import Presentation
+    from pptx.util import Pt
+    from pptx.dml.color import RGBColor
+
+# Allow either library; prefer PyMuPDF if available, fall back to PyPDF2
+try:
+    import fitz  # PyMuPDF
+except Exception:
+    fitz = None
 
 try:
     import PyPDF2
-    import fitz  # PyMuPDF
+except Exception:
+    PyPDF2 = None
 
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
+PDF_AVAILABLE = bool(fitz or PyPDF2)
+
 
 from src.services.aws_clients import s3_client, S3_BUCKET, LAMBDA_TMP_DIR
 from src.utils.file_parser import FileParser
@@ -863,25 +901,38 @@ class PDFContentExtractor:
     @staticmethod
     def extract_text(pdf_path: str) -> str:
         if not PDF_AVAILABLE:
-            raise ImportError("Install PDF libraries: pip install PyMuPDF PyPDF2")
+            raise ImportError(
+                "Install at least one PDF library: pip install PyPDF2 OR PyMuPDF"
+            )
+
         text_content = ""
-        try:
-            doc = fitz.open(pdf_path)
-            for page in doc:
-                text_content += page.get_text()
-            doc.close()
-            if len(text_content.strip()) > 100:
-                return PDFContentExtractor._clean_text(text_content)
-        except Exception:
-            pass
-        try:
-            with open(pdf_path, "rb") as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                for page in pdf_reader.pages:
-                    text_content += page.extract_text() or ""
-            return PDFContentExtractor._clean_text(text_content)
-        except Exception as e:
-            raise Exception(f"Could not extract text from PDF: {e}")
+
+        # 1) Try PyMuPDF if available (fast & high-quality)
+        if fitz is not None:
+            try:
+                doc = fitz.open(pdf_path)
+                for page in doc:
+                    text_content += page.get_text()
+                doc.close()
+                if text_content.strip():
+                    return PDFContentExtractor._clean_text(text_content)
+            except Exception:
+                pass  # fall back
+
+        # 2) Try PyPDF2 if available (pure-Python, easiest to ship)
+        if PyPDF2 is not None:
+            try:
+                with open(pdf_path, "rb") as fh:
+                    reader = PyPDF2.PdfReader(fh)
+                    for page in reader.pages:
+                        text_content += page.extract_text() or ""
+                if text_content.strip():
+                    return PDFContentExtractor._clean_text(text_content)
+            except Exception as e:
+                pass  # fall through
+
+        raise Exception("Could not extract text from PDF with available libraries")
+
 
     @staticmethod
     def _clean_text(text: str) -> str:
@@ -1001,6 +1052,17 @@ def generate_ppt_from_s3_report(
             logger.warning("PPT generation skipped: python-pptx not installed")
             return None
 
+        # Support generating all templates when requested
+        if template_type == "all":
+            result = generate_all_ppts_from_s3_report(
+                report_s3_url=report_s3_url,
+                company_name=company_name,
+                aws_region=aws_region,
+            )
+            # Return a JSON string of results for backward compatibility with Optional[str]
+            # Callers needing structured data should use generate_all_ppts_from_s3_report directly
+            return json.dumps(result) if result else None
+
         local_pdf = FileParser.download_s3_file(report_s3_url)
         if not local_pdf:
             logger.error(f"Failed to download report: {report_s3_url}")
@@ -1042,3 +1104,78 @@ def generate_ppt_from_s3_report(
     except Exception as e:
         logger.error(f"PPT generation failed: {e}")
         return None
+
+
+def generate_all_ppts_from_s3_report(
+    report_s3_url: str,
+    company_name: str,
+    aws_region: str = "us-east-1",
+) -> Dict[str, Optional[str]]:
+    """Generate all five PPT templates from an S3-hosted report PDF and upload to S3.
+
+    Args:
+        report_s3_url: S3 URL or https S3 URL to the generated report PDF
+        company_name: Name to use for personalization and naming
+        aws_region: AWS region for Bedrock
+
+    Returns:
+        Mapping of template_type -> public HTTPS URL (None for templates that failed)
+    """
+    results: Dict[str, Optional[str]] = {}
+
+    if not PPT_AVAILABLE:
+        logger.warning("PPT generation skipped: python-pptx not installed")
+        for t in TEMPLATE_REGISTRY.keys():
+            results[t] = None
+        return results
+
+    local_pdf: Optional[str] = None
+    try:
+        local_pdf = FileParser.download_s3_file(report_s3_url)
+        if not local_pdf:
+            logger.error(f"Failed to download report: {report_s3_url}")
+            for t in TEMPLATE_REGISTRY.keys():
+                results[t] = None
+            return results
+
+        generator = MultiTemplatePPTGenerator(aws_region)
+
+        for template_type in TEMPLATE_REGISTRY.keys():
+            try:
+                # Generate locally in temp dir
+                local_ppt = generator.generate_presentation(
+                    local_pdf, template_type, company_name, output_dir=LAMBDA_TMP_DIR
+                )
+
+                timestamp = datetime.now().strftime("%Y/%m/%d/%H%M%S")
+                company_clean = (company_name or "business").replace(" ", "-").lower()
+                key = f"presentations/{company_clean}/{timestamp}/{os.path.basename(local_ppt)}"
+
+                s3_client.upload_file(
+                    local_ppt,
+                    S3_BUCKET,
+                    key,
+                    ExtraArgs={
+                        "ContentType": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                    },
+                )
+
+                results[template_type] = f"https://{S3_BUCKET}.s3.amazonaws.com/{key}"
+            except Exception as e:
+                logger.error(f"PPT generation failed for template '{template_type}': {e}")
+                results[template_type] = None
+            finally:
+                try:
+                    # Best-effort cleanup per iteration
+                    if 'local_ppt' in locals() and os.path.exists(local_ppt):
+                        os.unlink(local_ppt)
+                except Exception:
+                    pass
+
+        return results
+    finally:
+        try:
+            if local_pdf and os.path.exists(local_pdf):
+                os.unlink(local_pdf)
+        except Exception:
+            pass

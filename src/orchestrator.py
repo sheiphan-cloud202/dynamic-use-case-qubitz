@@ -374,17 +374,20 @@ class AgenticWAFROrchestrator:
             try:
                 status_tracker.update_status(
                     StatusCheckpoints.PPT_GENERATION_STARTED,
-                    {"report_url": report_url, "ppt_template": ppt_template},
+                    {"report_url": report_url, "ppt_template": "all", "templates_generated": "all 5 templates"},
                 )
+                # Always generate all 5 PPT templates regardless of input
                 ppt_url = generate_ppt_from_s3_report(
-                    report_url, company_name, template_type=ppt_template
+                    report_url, company_name, template_type="all"
                 )
                 status_tracker.update_status(
                     StatusCheckpoints.PPT_GENERATION_COMPLETED,
                     {
                         "ppt_generated": bool(ppt_url),
                         "ppt_url": ppt_url,
-                        "ppt_template": ppt_template,
+                        "ppt_template": "all",
+                        "templates_count": 5,
+                        "templates_generated": "first_deck, marketing, use_case, technical, strategy",
                     },
                 )
                 print(f"🎞 PPT generated: {ppt_url if ppt_url else 'No PPT URL returned'}")
